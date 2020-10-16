@@ -30,7 +30,7 @@
 #'                            node = "Maize", node.child = "Phenology",
 #'                            node.subchild = "ThermalTime", 
 #'                            node.subsubchild = "BaseThermalTime",
-#'                            node.sub3child = "TemperatureResponse") 
+#'                            node.sub3child = "Response") 
 #'}
 #'\dontrun{  
 #' ## This function can also be used to inspect more complex APSIM-X files
@@ -52,7 +52,7 @@ inspect_apsimx_replacement <- function(file = "", src.dir = ".",
   
   .check_apsim_name(file)
   
-  file.names <- dir(path = src.dir, pattern=".apsimx$", ignore.case=TRUE)
+  file.names <- dir(path = src.dir, pattern = ".apsimx$", ignore.case = TRUE)
   
   if(length(file.names) == 0){
     stop("There are no .apsimx files in the specified directory to inspect.")
@@ -73,7 +73,7 @@ inspect_apsimx_replacement <- function(file = "", src.dir = ".",
   
   if(length(frn) > 1){
     if(is.na(root[[2]])){
-      cat("These positions matched ",root[[1]]," ",frn, "\n")
+      cat("These positions matched ", root[[1]], " ", frn, "\n")
       stop("Multiple root nodes found. Please provide a position")
     }else{
       replacements.node <- apsimx_json$Children[[frn[root[[2]]]]]
@@ -82,7 +82,7 @@ inspect_apsimx_replacement <- function(file = "", src.dir = ".",
     replacements.node <- apsimx_json$Children[[frn]]
   }
   
-  parm.path.0.1 <- paste0(parm.path.0, ".",replacements.node$Name)
+  parm.path.0.1 <- paste0(parm.path.0, ".", replacements.node$Name)
   ## Print names of replacements
   replacements.node.names <- vapply(replacements.node$Children, function(x) x$Name, 
                                     FUN.VALUE = "character")
@@ -99,7 +99,7 @@ inspect_apsimx_replacement <- function(file = "", src.dir = ".",
   ## This handles a missing node 'gracefully'
   if(missing(node)){
     parm.path <- parm.path.0.1
-    if(print.path) cat("Parm path:",parm.path,"\n") 
+    if(print.path) cat("Parm path:", parm.path, "\n") 
     if(verbose) cat("Please provide a node \n")
     return(invisible(parm.path))
   } 
@@ -113,12 +113,12 @@ inspect_apsimx_replacement <- function(file = "", src.dir = ".",
   
   ## wrn <- grep(node, replacements.node$Children) old version
   wrn <- grep(node, replacements.node.names)
-  if(length(wrn) > 1) stop("node should result in a unique result")
   if(length(wrn) == 0) stop("node not found")
+  if(length(wrn) > 1) stop("More than one node found. Make it unique (see regular expressions)")
   rep.node <- replacements.node$Children[[wrn]] ## Is this robust enough?
   ## This last object is a list with Children
   
-  parm.path.0.1.1 <- paste0(parm.path.0.1,".",rep.node$Name)
+  parm.path.0.1.1 <- paste0(parm.path.0.1, ".", rep.node$Name)
   
   if(!is.null(rep.node$CropType) && verbose) cat("CropType", rep.node$CropType, "\n")
   
@@ -148,9 +148,10 @@ inspect_apsimx_replacement <- function(file = "", src.dir = ".",
   
   wrnc <- grep(node.child, rep.node.children.names)
   if(length(wrnc) == 0) stop("node.child not found")
+  if(length(wrnc) > 1) stop("More than one child found. Make it unique (see regular expressions)")
   rep.node.child <- rep.node$Children[[wrnc]]
   
-  parm.path.0.1.1.1 <- paste0(parm.path.0.1.1,".",rep.node.child$Name)
+  parm.path.0.1.1.1 <- paste0(parm.path.0.1.1, ".", rep.node.child$Name)
   
   ## If children are missing display data at this level
   ## Conditions for stopping here:
@@ -179,6 +180,7 @@ inspect_apsimx_replacement <- function(file = "", src.dir = ".",
                                        FUN.VALUE = "character")
   wrnsc <- grep(node.subchild, rep.node.subchildren.names)
   if(length(wrnsc) == 0) stop("node.subchild not found")
+  if(length(wrnsc) > 1) stop("More than one subchild found. Make it unique (see regular expressions)")
   rep.node.subchild <- rep.node.child$Children[[wrnsc]]
   
   parm.path.0.1.1.1.1 <- paste0(parm.path.0.1.1.1,".",rep.node.subchild$Name)
@@ -212,6 +214,7 @@ inspect_apsimx_replacement <- function(file = "", src.dir = ".",
                                           FUN.VALUE = "character")
   wrnssc <- grep(node.subsubchild, rep.node.subsubchildren.names)
   if(length(wrnssc) == 0) stop("node.subsubchild not found")
+  if(length(wrnssc) > 1) stop("More than one subsubchild found. Make it unique (see regular expressions)")
   rep.node.subsubchild <- rep.node.subchild$Children[[wrnssc]]
   
   if(verbose) cat("Name sub-sub-child: ", rep.node.subsubchild$Name, "\n")
@@ -262,9 +265,9 @@ inspect_apsimx_replacement <- function(file = "", src.dir = ".",
       rep.node.sub3child <- rep.node.subsubchild[wrnsspc]
       cat_parm(rep.node.sub3child, parm = parm)
   }else{
-    if(!is.null(parm) && any(parm %in% unlist(rep.node.subsubchild$Command))){
+    if(!is.null(parm) && any(grepl(parm, unlist(rep.node.subsubchild$Command)))){
       wcp <- grep(parm, unlist(rep.node.subsubchild$Command))
-      cat(unlist(rep.node.subsubchild$Command)[wcp])
+      cat(unlist(rep.node.subsubchild$Command)[wcp], "\n")
     }else{
       if(!is.null(parm) && missing(node.sub3child)) stop("Parameter not found")
     }
@@ -284,6 +287,7 @@ inspect_apsimx_replacement <- function(file = "", src.dir = ".",
                                        FUN.VALUE = "character")
   wrnsssc <- grep(node.sub3child, rep.node.sub3children.names)
   if(length(wrnsssc) == 0) stop("node.sub3child not found")
+  if(length(wrnsssc) > 1) stop("More than one sub3child found. Make it unique (see regular expressions)")
   rep.node.sub4child <- rep.node.subsubchild$Children[[wrnsssc]]
   
   if(verbose) cat("Name sub-sub-sub-child: ", rep.node.sub4child$Name, "\n")
@@ -366,7 +370,7 @@ unpack_node <- function(x, parm = NULL, display.available = FALSE){
     return(cat("Key: ", names(x), "; Value: ", x[[1]], "\n"))
   }
   
-  if(all(sapply(x, is.atomic))){
+  if(all(sapply(x, is.atomic)) || (!is.null(parm) && parm %in% names(x))){
     ## This is for a list which has all atomic elements
     ## If one of the elements is an empty list
     ## This will fail

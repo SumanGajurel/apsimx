@@ -8,7 +8,8 @@
 compare_apsim_met(
   ...,
   met.var = c("all", "radn", "maxt", "mint", "rain", "rh", "wind_speed", "vp"),
-  labels
+  labels,
+  check = FALSE
 )
 
 \method{plot}{met_mrg}(
@@ -16,9 +17,10 @@ compare_apsim_met(
   ...,
   plot.type = c("vs", "diff", "ts", "density"),
   pairs = c(1, 2),
-  cummulative = FALSE,
+  cumulative = FALSE,
   met.var = c("radn", "maxt", "mint", "rain"),
-  id
+  id,
+  span = 0.75
 )
 }
 \arguments{
@@ -28,15 +30,19 @@ compare_apsim_met(
 
 \item{labels}{labels for plotting and identification of \sQuote{met} objects.}
 
+\item{check}{whether to check met files using \sQuote{check_apsim_met}.}
+
 \item{x}{object of class \sQuote{met_mrg}}
 
 \item{plot.type}{either \sQuote{vs}, \sQuote{diff}, \sQuote{ts} - for time series or \sQuote{density}}
 
 \item{pairs}{pair of objects to compare, defaults to 1 and 2 but others are possible}
 
-\item{cummulative}{whether to plot cummulative values (default FALSE)}
+\item{cumulative}{whether to plot cumulative values (default FALSE)}
 
-\item{id}{identification ??}
+\item{id}{identification (not implemented yet)}
+
+\item{span}{argument to be passed to \sQuote{geom_smooth}}
 }
 \value{
 object of class \sQuote{cmet}, which can be used for further plotting
@@ -45,9 +51,6 @@ object of class \sQuote{cmet}, which can be used for further plotting
 Helper function which allows for a simple comparison among help files
 
 plotting function for compare_apsim_met, it requires ggplot2
-}
-\details{
-Compare two or more metfiles
 }
 \note{
 I have only tested this for 2 or 3 objects. The code is set up to be able to 

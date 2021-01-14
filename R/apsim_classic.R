@@ -35,7 +35,10 @@ apsim <- function(file = "", src.dir = ".",
   
   if(file == "") stop("need to specify file name")
   
+  ## This checks that there are no spaces in the path
+  ## this would create a problem when running things at the command line
   .check_apsim_name(.file = file)
+  .check_apsim_name(.file = src.dir)
   
   if(src.dir != ".") stop("In APSIM Classic you can only run a file from the current directory.")
   
@@ -117,11 +120,26 @@ auto_detect_apsim <- function(){
   laf <- list.files(st1)
   find.apsim <- grep("APSIM", laf, ignore.case = TRUE)
   
-  if(length(find.apsim) == 0) stop("APSIM 'Classic' not found")
-  
-  apsim.versions <- laf[find.apsim]
+  if(length(find.apsim) == 0 && is.na(apsimx::apsim.options$exe.path)){
+    ## Try the registry approach only if there is no 'exe.path'
+    ## HCR hive is for HKEY_CLASSES_ROOT, HLM is for HKEY_LOCAL_MACHINE and HCU is for HKEY_CURRENT_USER
+    regcmd <- try(utils::readRegistry("APSIMFile\\shell\\open\\command", "HCR")[[1]], silent = TRUE)
+    if(inherits(regcmd, "try-error")) regcmd <- try(utils::readRegistry("APSIMFile\\shell\\open\\command", "HCU")[[1]], silent = TRUE)
+    if(inherits(regcmd, "try-error")) regcmd <- try(utils::readRegistry("APSIMFile\\shell\\open\\command", "HLM")[[1]], silent = TRUE)
+    if(inherits(regcmd, "try-error")) stop("Could not find APSIM Classic in the Windows Registry")
+    regcmd2 <- gsub("\\\\", "/", strsplit(regcmd, "\"")[[1]][2])
+    apsim_dir <- gsub("UI", "Models", regcmd2)
+    if(length(apsim_dir) == 0) stop("APSIM Classic was not found and no 'exe.path' exists.")
+    if(grepl("\\s", apsim_dir)) stop("Found a space in the path. Please provide the path manually to APSIM using exe.path in apsim_options.")
+    return(apsim_dir)
+  } 
+
+  if(length(find.apsim) == 1){
+    apsim.name <- laf[find.apsim]
+  }
   
   if(length(find.apsim) > 1){
+    apsim.versions <- laf[find.apsim]
     max.main.version <- max(sapply(apsim.versions, fmv))
     which.main.versions <- grep(max.main.version, apsim.versions)
     versions <- sapply(apsim.versions[which.main.versions], fev)
@@ -133,12 +151,11 @@ auto_detect_apsim <- function(){
       }
     ## apsim.name <- grep(newest.version, apsim.versions, value = TRUE)
     apsim.name <- newest.version
-  }else{
-    apsim.name <- laf[find.apsim]
   }
+  
   ## APSIM executable
   st3 <- "/Model/Apsim.exe" 
-  apsim_dir <- paste0(st1, apsim.name, st3)
+  if(length(apsim.name) >= 1) apsim_dir <- paste0(st1, apsim.name, st3)
   
   if(!is.na(apsimx::apsim.options$exe.path)){
     ## Windows paths can contain white spaces which are

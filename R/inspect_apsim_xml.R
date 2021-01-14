@@ -27,7 +27,6 @@
 #' inspect_apsim("Millet.apsim", src.dir = extd.dir, node = "Clock")
 #' inspect_apsim("Millet.apsim", src.dir = extd.dir, node = "Weather") 
 #' inspect_apsim("Millet.apsim", src.dir = extd.dir, node = "Soil", soil.child = "Metadata")
-#' inspect_apsim("Millet.apsim", src.dir = extd.dir, node = "Soil", soil.child = "Water")
 #' inspect_apsim("Millet.apsim", src.dir = extd.dir, node = "Soil", soil.child = "OrganicMatter")
 #' inspect_apsim("Millet.apsim", src.dir = extd.dir, node = "Soil", soil.child = "Analysis")
 #' inspect_apsim("Millet.apsim", src.dir = extd.dir, node = "Soil", soil.child = "InitialWater")
@@ -36,6 +35,19 @@
 #' inspect_apsim("Millet.apsim", src.dir = extd.dir, node = "Crop", parm = list("sow",NA)) 
 #' inspect_apsim("Millet.apsim", src.dir = extd.dir, node = "Crop", parm = list("sow",7))
 #' 
+#' ## when soil.child = "Water" there are potentially many crops to chose from 
+#' ## This selects LL, KL and XF for Barley
+#' inspect_apsim("Millet.apsim", src.dir = extd.dir, node = "Soil", 
+#'               soil.child = "Water", parm = "Barley")
+#' ## This selects LL for all the crops
+#' inspect_apsim("Millet.apsim", src.dir = extd.dir, node = "Soil", 
+#'               soil.child = "Water", parm = "LL")
+#' ## To print the parm.path the selection needs to be unique
+#' ## but still there will be multiple soil layers
+#' ## 'parm' can be a list or a character vector of length equal to two
+#' inspect_apsim("Millet.apsim", src.dir = extd.dir, node = "Soil", 
+#'               soil.child = "Water", parm = list("Barley", "LL"),
+#'               print.path = TRUE)
 #' 
 #' ## Testing with maize-soybean-rotation.apsim
 #' inspect_apsim("maize-soybean-rotation.apsim", src.dir = extd.dir, node = "Clock")
@@ -137,6 +149,7 @@ inspect_apsim <- function(file = "", src.dir = ".",
       cat(i, ":", xml2::xml_text(clock.node), "\n")
     }
     if(!missing(parm)){
+      parm <- grep(parm, parms, value = TRUE)
       parm.path.1 <- paste0(parm.path.0, "/", parm)
     }
   }
@@ -145,6 +158,10 @@ inspect_apsim <- function(file = "", src.dir = ".",
     parm.path.0 <- ".//metfile/filename" 
     weather.filename.node <- xml2::xml_find_first(apsim_xml, parm.path.0)
     cat("Met file:", (xml2::xml_text(weather.filename.node)), "\n")
+    if(!missing(parm)){
+      if(parm != "filename") warning("parm should be 'filname' when 'node = Weather'")
+      parm.path.1 <- parm.path.0
+    }
   }
   
   ## Extracting soil Depths
@@ -191,32 +208,44 @@ inspect_apsim <- function(file = "", src.dir = ".",
           j <- j + 1
         }
       }
-      print(knitr::kable(stats::na.omit(met.dat)))
+      
+      if(missing(parm)){
+        print(knitr::kable(stats::na.omit(met.dat)))
+      }else{
+        parm.path.1 <- paste0(parm.path.0, "/", parm)
+        met.dat.nmd <- stats::na.omit(met.dat)
+        met.dat.nmd.p <- met.dat.nmd[met.dat.nmd$parm == parm, ]
+        print(knitr::kable(met.dat.nmd.p))
+      } 
     }
     
     if(soil.child == "Water"){
       ## Crop specific
       crop.parms <- c("LL", "KL", "XF")
       
+      ## How many crops are present?
+      number.of.crops <- length(xml2::xml_attrs(xml2::xml_find_all(apsim_xml, ".//Soil/Water/SoilCrop")))
+      crop.names <- as.character(unlist(xml2::xml_attrs(xml2::xml_find_all(apsim_xml, ".//Soil/Water/SoilCrop"))))
+      crop.names.parms <- c(sapply(crop.names, function(x) paste(x, crop.parms)))
+      
       val.mat <- matrix(NA, 
-                        ncol = (length(crop.parms)+1),
+                        ncol = c(length(crop.parms) * number.of.crops)+1,
                         nrow = number.soil.layers)
       
       crop.d <- data.frame(val.mat)
       crop.d[,1] <- soil.depths
-      names(crop.d) <- c("Depth", crop.parms)
+      names(crop.d) <- c("Depth", crop.names.parms)
       j <- 2
-      for(i in crop.parms){
-        parm.path.0 <- ".//Soil/Water/SoilCrop"
-        parm.path.1 <- paste0(parm.path.0, "/", i)
-        soil.water.crop.node <- xml2::xml_find_first(apsim_xml, parm.path.1)
-        crop.d[,j] <- xml2::xml_double(xml2::xml_children(soil.water.crop.node))
-        j <- j + 1
+      for(i in crop.names){
+        for(k in crop.parms){
+          parm.path.0 <- ".//Soil/Water/SoilCrop"
+          parm.path.1 <- paste0(parm.path.0, "[@name='", i, "']", "/", k)
+          soil.water.crop.node <- xml2::xml_find_first(apsim_xml, parm.path.1)
+          crop.d[,j] <- xml2::xml_double(xml2::xml_children(soil.water.crop.node))
+          j <- j + 1          
+        }
       }
       
-      if(!missing(parm) && parm %in% crop.parms)
-          parm.path.0 <- ".//Soil/Water/SoilCrop"
-
       soil.parms <- c("Thickness", "BD", "AirDry", "LL15", "DUL", "SAT", "KS")
       
       val.mat <- matrix(NA, 
@@ -234,10 +263,6 @@ inspect_apsim <- function(file = "", src.dir = ".",
         soil.d[,j] <- xml2::xml_double(xml2::xml_children(soil.water.node))
         j <- j + 1
       }
-      print(knitr::kable(cbind(crop.d,soil.d), digits = digits))
-      
-      if(!missing(parm) && parm %in% soil.parms) 
-        parm.path.0 <- ".//Soil/Water"
       
       ## Soil Water
       soil.water.parms <- c("SummerCona", "SummerU", "SummerDate",
@@ -255,14 +280,56 @@ inspect_apsim <- function(file = "", src.dir = ".",
         soil.water.d[j,"value"] <- xml2::xml_text(soil.water.node)
         j <- j + 1
       }
-      print(knitr::kable(soil.water.d, digits = digits))
       
-      if(!missing(parm) && parm %in% soil.water.parms) 
+      if(missing(parm)){
+        print(knitr::kable(cbind(crop.d,soil.d), digits = digits))  
+        print(knitr::kable(soil.water.d, digits = digits))
+      }else{
+        found.parm <- FALSE
+        ## parm is either a list or a string and it is in crop.parms or crop.names
+        if(length(parm) == 1 && (parm %in% crop.parms || parm %in% crop.names)){
+          sparm <- grep(parm, crop.names.parms, value = TRUE, ignore.case = TRUE)
+          print(knitr::kable(subset(crop.d, select = sparm), digits = digits))
+          if(print.path) stop("parameter should be unique if print.path = TRUE")
+          found.parm <- TRUE
+        }
+        if(length(parm) == 2){
+          if(is.list(parm)){
+            parm.path.0 <- ".//Soil/Water/SoilCrop"
+            parm.path.1 <- paste0(parm.path.0, "[@name='", parm[[1]], "']", "/", parm[[2]])
+            sparm <- paste(parm[[1]], parm[[2]])
+            if(inherits(try(subset(crop.d, select = sparm), silent = TRUE), "try-error")) stop("parm not found")
+            print(knitr::kable(subset(crop.d, select = sparm), digits = digits))
+            found.parm <- TRUE
+          }
+          if(is.character(parm)){
+            parm.path.0 <- ".//Soil/Water/SoilCrop"
+            parm.path.1 <- paste0(parm.path.0, "[@name='", parm[1], "']", "/", parm[2])
+            sparm <- paste(parm[1], parm[2])
+            if(inherits(try(subset(crop.d, select = sparm), silent = TRUE), "try-error")) stop("parm not found")
+            print(knitr::kable(subset(crop.d, select = sparm), digits = digits))
+            found.parm <- TRUE
+          }
+        }
+        ## parm is in 'soil.parms'
+        if(length(parm) == 1 && parm %in% soil.parms){
+          parm.path.0 <- ".//Soil/Water"
+          parm.path.1 <- paste0(parm.path.0, "/", parm)
+          print(knitr::kable(subset(soil.d, select = parm), digits = digits))  
+          found.parm <- TRUE
+        }
+        ## parm is in 'soil.water.parms'
+        if(length(parm) == 1 && parm %in% soil.water.parms){
           parm.path.0 <- ".//Soil/SoilWater"
+          parm.path.1 <- paste0(parm.path.0, "/", parm)
+          print(knitr::kable(soil.water.d[soil.water.d$soil.water == parm,], digits = digits)) 
+          found.parm <- TRUE
+        }
+        if(!found.parm) stop("parm not found")
+      }
     }
     
     if(soil.child == "SWIM"){
-    
       parm.path.0 <- ".//Soil/Swim"
       ## This first set are single values
       swim.parms1 <- c("Salb","CN2Bare","CNRed","CNCov","KDul",
@@ -279,7 +346,8 @@ inspect_apsim <- function(file = "", src.dir = ".",
         swim.parms1.d[j,"value"] <- xml2::xml_text(swim.parm.node)
         j <- j + 1
       }
-      print(knitr::kable(swim.parms1.d))
+      
+      if(missing(parm)) print(knitr::kable(swim.parms1.d))
       
       ## Water table and Subsurface drain
       swim.parms2 <- c("SwimWaterTable/WaterTableDepth",
@@ -298,14 +366,25 @@ inspect_apsim <- function(file = "", src.dir = ".",
         swim.parms2.d[j,"value"] <- xml2::xml_text(swim.parm.node)
         j <- j + 1
       }
-      print(knitr::kable(swim.parms2.d))
+      if(missing(parm)) print(knitr::kable(swim.parms2.d))
       
       if(!missing(parm) && parm %in% swim.parms2){
-        if(grepl("WaterTableDepth",parm,fixed=TRUE)){
+        if(grepl("WaterTableDepth", parm, fixed=TRUE)){
           parm.path.0 <- paste0(parm.path.0, "/", "SwimWaterTable")
         }else{
           parm.path.0 <- paste0(parm.path.0, "/", "SwimSubsurfaceDrain")
         }
+      }
+      
+      if(!missing(parm)){
+        if(parm %in% swim.parms1){
+          print(knitr::kable(swim.parms1.d[swim.parms1.d$parm == parm,]))
+        }
+        if(parm %in% swim.parms2){
+          mparm <- gsub("/", " : ", parm)
+          print(knitr::kable(swim.parms2.d[swim.parms2.d$parm == mparm,]))
+        }
+        if(!(parm %in% c(swim.parms1, swim.parms2))) warning("parameter not found in the SWIM module")
       }
     }
     
@@ -341,7 +420,8 @@ inspect_apsim <- function(file = "", src.dir = ".",
         soil.som1.node <- xml2::xml_find_first(apsim_xml, parm.path.1)
         som.d1[som.d1$parm == i,2] <- xml2::xml_text(soil.som1.node)
       }
-      print(knitr::kable(som.d1, digits = digits))
+      
+      if(missing(parm)) print(knitr::kable(som.d1, digits = digits))
       
       som.parms2 <- c("Thickness", "OC", "FBiom", "FInert")
       
@@ -361,15 +441,22 @@ inspect_apsim <- function(file = "", src.dir = ".",
         som.d2[,j] <- xml2::xml_text(xml2::xml_children(soil.som2.node))
         j <- j + 1
       }
-      print(knitr::kable(som.d2, digits = digits))
+      if(missing(parm)) print(knitr::kable(som.d2, digits = digits))
       
-      if(!missing(parm) && parm %in% c(som.parms1,som.parms2)){
-        parm.path.0 <- ".//Soil/SoilOrganicMatter"
+      if(!missing(parm) && parm %in% c(som.parms1, som.parms2)){
+        parm.path.1 <- paste0(".//Soil/SoilOrganicMatter", "/", parm)
+        if(parm %in% som.parms1){
+          print(knitr::kable(som.d1[som.d1$parm == parm,], digits = digits))
+        }
+        if(parm %in% som.parms2){
+          print(knitr::kable(subset(som.d2, select = parm), digits = digits))  
+        }
       }
     }
     
     if(soil.child == "Analysis"){
       ## I will keep this one hard coded because it is simple
+      ## There are many potential elements but can't imagine wanting to edit them
       analysis.parms <- c("Thickness", "PH", "EC")
       
       val.mat <- matrix(NA, 
@@ -383,15 +470,16 @@ inspect_apsim <- function(file = "", src.dir = ".",
       j <- 2
       for(i in analysis.parms){
         parm.path.0 <- ".//Soil/Analysis"
-        parm.path.1 <- paste0(parm.path.1, "/", i)
+        parm.path.1 <- paste0(parm.path.0, "/", i)
         soil.analysis.node <- xml2::xml_find_first(apsim_xml, parm.path.1)
         analysis.d[,j] <- xml2::xml_text(xml2::xml_children(soil.analysis.node))
         j <- j + 1
       }
-      print(knitr::kable(analysis.d, digits = digits))
+      if(missing(parm)) print(knitr::kable(analysis.d, digits = digits))
       
       if(!missing(parm) && parm %in% analysis.parms){
-        parm.path.0 <- ".//Soil/Analysis"
+        parm.path.1 <- paste0(".//Soil/Analysis", "/", parm)
+        print(knitr::kable(subset(analysis.d, select = parm), digits = digits))
       }
     }
     
@@ -406,10 +494,11 @@ inspect_apsim <- function(file = "", src.dir = ".",
         soil.InitialWater.node <- xml2::xml_find_first(apsim_xml, parm.path.1)
         initial.water.d[initial.water.d$parm == i,2] <- xml2::xml_text(soil.InitialWater.node)
       }
-      print(knitr::kable(initial.water.d, digits = digits))
+      if(missing(parm)) print(knitr::kable(initial.water.d, digits = digits))
       
-      if(!missing(parm) && parm %in% analysis.parms){
-        parm.path.0 <- ".//Soil/Analysis"
+      if(!missing(parm) && parm %in% initialwater.parms){
+        parm.path.1 <- paste0(".//Soil/InitialWater", "/", parm)
+        print(knitr::kable(initial.water.d[initial.water.d$parm == parm, ], digits = digits))
       }
     }
     
@@ -432,19 +521,16 @@ inspect_apsim <- function(file = "", src.dir = ".",
         sample.d[,j] <- xml2::xml_text(xml2::xml_children(soil.sample.node))
         j <- j + 1
       }
-      print(knitr::kable(sample.d, digits = digits))
+      if(missing(parm)) print(knitr::kable(sample.d, digits = digits))
       
       if(!missing(parm) && parm %in% sample.parms){
-        parm.path.0 <- ".//Soil/Sample"
+        parm.path.1 <- paste0(".//Soil/Sample", "/", parm)
+        print(knitr::kable(subset(sample.d, select = parm), digits = digits))
       }
     }
   }
   
   if(node == "SurfaceOrganicMatter"){
-    ## The lines below are hardcoded, which could be used if we want to
-    ## restrict the variables to inspect
-    ## pools.parms <- c("PoolName","ResidueType","Mass","CNRatio",
-    ##             "CPRatio","StandingFraction")
     pools.path <- ".//surfaceom"
     pools.parms <- xml2::xml_name(xml2::xml_children(xml2::xml_find_first(apsim_xml, pools.path)))
       
@@ -453,12 +539,15 @@ inspect_apsim <- function(file = "", src.dir = ".",
     for(i in pools.parms){
       parm.path.1 <- paste0(pools.path, "/", i)
       soil.pools.node <- xml2::xml_find_first(apsim_xml, parm.path.1)
-      pools.d[pools.d$parm == i,2] <- xml2::xml_text(soil.pools.node)
+      pools.d[pools.d$parm == i, 2] <- xml2::xml_text(soil.pools.node)
     }
-    print(knitr::kable(pools.d, digits = digits))
+    
+    if(missing(parm)) print(knitr::kable(pools.d, digits = digits))
     
     if(!missing(parm) && parm %in% pools.parms){
       parm.path.0 <- ".//surfaceom"
+      parm.path.1 <- paste0(".//surfaceom", "/", parm)
+      print(knitr::kable(pools.d[pools.d$parm == parm,], digits = digits))
     }
   }
 
@@ -578,10 +667,12 @@ inspect_apsim_xml <- function(file = "",
                               verbose = TRUE,
                               print.path = TRUE){
   
-  file.names <- dir(path = src.dir, pattern = ".xml$", ignore.case = TRUE)
+  file.names.xml <- dir(path = src.dir, pattern = ".xml$", ignore.case = TRUE)
+  file.names.apsim <- dir(path = src.dir, pattern = ".apsim$", ignore.case = TRUE)
+  file.names <- c(file.names.xml, file.names.apsim)
   
   if(length(file.names) == 0){
-    stop("There are no .xml files in the specified directory to inspect.")
+    stop("There are no .xml or .apsim files in the specified directory to inspect.")
   }
   
   file <- match.arg(file, file.names)

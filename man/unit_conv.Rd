@@ -17,19 +17,35 @@ unit_conv(x, from, to)
 value of the input variable with new units
 }
 \description{
-Function which performs common unit conversions
+It does not do much at the moment, but I will develop it as I have 
+increasing needs for unit conversions.
 }
 \details{
+Function which performs common unit conversions
+
 At the moment possible conversions are:
 \itemize{
 
 \item \sQuote{g/m2} to \sQuote{kg/ha}
 \item \sQuote{kg/ha} to \sQuote{g/m2}
+\item \sQuote{lb} to \sQuote{kg}
+\item \sQuote{kg} to \sQuote{lb}
+\item \sQuote{maize bu} to \sQuote{kg}
+\item \sQuote{kg} to \sQuote{maize bu}
+\item \sQuote{soy bu} to \sQuote{kg}
+\item \sQuote{kg} to \sQuote{soy bu}
+\item \sQuote{maize bu/ac} to \sQuote{kg/ha}
+\item \sQuote{kg/ha} to \sQuote{maize bu/ac}
+\item \sQuote{soy bu/ac} to \sQuote{kg/ha}
+\item \sQuote{kg/ha} to \sQuote{soy bu/ac}
 
 }
+
+This is for metric and Imperial conversions
+Source: https://www.extension.iastate.edu/agdm/wholefarm/html/c6-80.html
 }
 \examples{
-\dontrun{
+\donttest{
 grain.yield.gm2 <- 600
 grain.yield.kgha <- unit_conv(grain.yield.gm2, from = "g/m2", to = "kg/ha")
 grain.yield.kgha

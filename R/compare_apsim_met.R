@@ -1,4 +1,3 @@
-#' Compare two or more metfiles
 #' 
 #' @title Compare two or more metfiles
 #' @name compare_apsim_met
@@ -9,6 +8,7 @@
 #' \sQuote{radn}, \sQuote{maxt}, \sQuote{mint}, \sQuote{rain}, \sQuote{rh}, 
 #' \sQuote{wind_speed} or \sQuote{vp}. 
 #' @param labels labels for plotting and identification of \sQuote{met} objects.
+#' @param check whether to check met files using \sQuote{check_apsim_met}.
 #' @note I have only tested this for 2 or 3 objects. The code is set up to be able to 
 #' compare more, but I'm not sure that would be all that useful.
 #' @export
@@ -43,7 +43,8 @@ compare_apsim_met <- function(...,
                               met.var = c("all", "radn", "maxt", 
                                           "mint", "rain", "rh", 
                                           "wind_speed", "vp"),
-                              labels){
+                              labels,
+                              check = FALSE){
   
   mets <- list(...)
   
@@ -64,7 +65,10 @@ compare_apsim_met <- function(...,
   
   if(!inherits(met1, "met")) stop("object should be of class 'met' ")
   
-  ## Create the 'date' fir indexing
+  ## Check for any issues
+  if(check) check_apsim_met(met1)
+  
+  ## Create the 'date' for indexing
   nms1 <- names(met1)
   met.mrg <- met1
   yr <- as.character(met1$year[1])
@@ -77,6 +81,7 @@ compare_apsim_met <- function(...,
     
     if(ncol(met1) != ncol(met.i)) stop("met files should have the same number of columns")
     if(all(!names(met1) %in% names(met.i))) stop("met files should have the same column names")
+    if(check) check_apsim_met(met.i)
     
     yr <- as.character(met.i$year[1])
     met.i$dates <- as.Date(0:c(nrow(met.i) - 1), origin = as.Date(paste0(yr, "-01-01")))
@@ -145,16 +150,17 @@ compare_apsim_met <- function(...,
 #' @param ... additional arguments, can be passed to certain ggplot2 functions
 #' @param plot.type either \sQuote{vs}, \sQuote{diff}, \sQuote{ts} - for time series or \sQuote{density}
 #' @param pairs pair of objects to compare, defaults to 1 and 2 but others are possible
-#' @param cummulative whether to plot cummulative values (default FALSE)
+#' @param cumulative whether to plot cumulative values (default FALSE)
 #' @param met.var meteorological variable to plot 
-#' @param id identification ??
+#' @param id identification (not implemented yet)
+#' @param span argument to be passed to \sQuote{geom_smooth}
 #' @export
 #' 
 plot.met_mrg <- function(x, ..., plot.type = c("vs", "diff", "ts", "density"),
                          pairs = c(1, 2),
-                         cummulative = FALSE,
+                         cumulative = FALSE,
                          met.var = c("radn", "maxt", "mint", "rain"),
-                         id){
+                         id, span = 0.75){
 
   if(!requireNamespace("ggplot2", quietly = TRUE)){
     warning("ggplot2 is required for this plotting function")
@@ -169,10 +175,10 @@ plot.met_mrg <- function(x, ..., plot.type = c("vs", "diff", "ts", "density"),
   plot.type <- match.arg(plot.type)
   met.var <- match.arg(met.var)
   
-  if(cummulative && plot.type != "ts") 
+  if(cumulative && plot.type != "ts") 
     stop("cummulative is only available for plot.type = 'ts' ")
   
-  if(plot.type == "vs" && met.var != "all" && !cummulative){
+  if(plot.type == "vs" && met.var != "all" && !cumulative){
     tmp <- x[, grep(met.var, names(x))]
     prs <- paste0(met.var, ".", pairs)
     gp1 <- ggplot2::ggplot(data = tmp, ggplot2::aes(x = eval(parse(text = eval(prs[1]))), 
@@ -187,7 +193,7 @@ plot.met_mrg <- function(x, ..., plot.type = c("vs", "diff", "ts", "density"),
 
   }
   
-  if(plot.type == "diff" && met.var != "all" && !cummulative){
+  if(plot.type == "diff" && met.var != "all" && !cumulative){
     
     prs0 <- paste0(met.var, ".", pairs)
     prs <- paste0(prs0, collapse = "|")
@@ -208,7 +214,7 @@ plot.met_mrg <- function(x, ..., plot.type = c("vs", "diff", "ts", "density"),
     print(gp1)   
   }
   
-  if(plot.type == "ts" && met.var != "all" && !cummulative){
+  if(plot.type == "ts" && met.var != "all" && !cumulative){
     
     prs0 <- paste0(met.var, ".", pairs)
     prs <- paste0(prs0, collapse = "|")
@@ -220,12 +226,12 @@ plot.met_mrg <- function(x, ..., plot.type = c("vs", "diff", "ts", "density"),
                                                     color = paste(m.nms[pairs[1]], prs0[1]))) +
                                                     
       ggplot2::geom_point() + 
-      ggplot2::geom_smooth(...) + 
+      ggplot2::geom_smooth(span = span, ...) + 
       ggplot2::geom_point(ggplot2::aes(y = eval(parse(text = eval(prs0[2]))),
                                        color = paste(m.nms[pairs[2]], prs0[2]))) + 
       ggplot2::geom_smooth(ggplot2::aes(y = eval(parse(text = eval(prs0[2]))),
                                         color = paste(m.nms[pairs[2]], prs0[2])),
-                           ...) + 
+                           span = span, ...) + 
       ggplot2::xlab("Date") + 
       ggplot2::ylab(met.var) + 
       ggplot2::theme(legend.title = ggplot2::element_blank())
@@ -233,7 +239,7 @@ plot.met_mrg <- function(x, ..., plot.type = c("vs", "diff", "ts", "density"),
     print(gp1)   
   }
   
-  if(plot.type == "ts" && met.var != "all" && cummulative){
+  if(plot.type == "ts" && met.var != "all" && cumulative){
     
     prs0 <- paste0(met.var, ".", pairs)
     prs <- paste0(prs0, collapse = "|")
@@ -256,7 +262,7 @@ plot.met_mrg <- function(x, ..., plot.type = c("vs", "diff", "ts", "density"),
     print(gp1)   
   }
   
-  if(plot.type == "density" && met.var != "all" && !cummulative){
+  if(plot.type == "density" && met.var != "all" && !cumulative){
     
     prs0 <- paste0(met.var, ".", pairs)
     prs <- paste0(prs0, collapse = "|")

@@ -4,14 +4,22 @@
 \alias{impute_apsim_met}
 \title{Perform imputation for missing data in a met file}
 \usage{
-impute_apsim_met(met, method = c("approx", "splines", "mean"), verbose = FALSE)
+impute_apsim_met(
+  met,
+  method = c("approx", "spline", "mean"),
+  verbose = FALSE,
+  ...
+)
 }
 \arguments{
 \item{met}{object of class \sQuote{met}}
 
-\item{method}{method for imputation, \code{\link{approx}}, \code{\link{splines}} or \code{\link{mean}}}
+\item{method}{method for imputation, \sQuote{approx} (\code{\link[stats]{approxfun}}),
+\sQuote{spline} (\code{\link[stats]{splinefun}}) or \sQuote{mean} (\code{\link{mean}}).}
 
 \item{verbose}{whether to print missing data to the console, default = FALSE}
+
+\item{...}{additional arguments to be passed to imputation method}
 }
 \value{
 an object of class \sQuote{met} with attributes

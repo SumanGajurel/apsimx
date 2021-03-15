@@ -3,11 +3,13 @@
 #' @name compare_apsim
 #' @rdname compare_apsim
 #' @description Function which allows for a simple comparison between APSIM output objects
-#' @param ... data frames with APSIM output. 
+#' @param ... data frames with APSIM output or observed data. 
 #' @param variable specific variable to compare. By default all common ones are compared.
 #' @param index index for merging objects. Default is \sQuote{Date}
 #' @param by factor for splitting the comparison, such as a treatment effect.
 #' @param labels labels for plotting and identification of objects.
+#' @note \sQuote{Con Corr} is the concordance correlation coefficient (https://en.wikipedia.org/wiki/Concordance_correlation_coefficient);
+#' \sQuote{ME} is the model efficiency (https://en.wikipedia.org/wiki/Nash%E2%80%93Sutcliffe_model_efficiency_coefficient)
 #' @export
 #' @return object of class \sQuote{out_mrg}, which can be used for further plotting
 #' @examples 
@@ -41,9 +43,9 @@ compare_apsim <- function(...,
   
   n.outs <- length(outs)
   
-  if(n.outs < 2) stop("you should provide at least two output files")
+  if(n.outs < 2) stop("you should provide at least two data frames")
   
-  out1 <- outs[[1]]
+  out1 <- as.data.frame(outs[[1]])
   
   o.nms <- NULL
   if(!missing(labels)){
@@ -56,22 +58,39 @@ compare_apsim <- function(...,
 
   ## Process out1
   nms1 <- names(out1)
-  new.nms1 <- paste0(nms1, ".1")
-  out1 <- subset(out1, select = c(index, nms1[-which(nms1 == index)]))
-  names(out1) <- gsub(paste0(index,".1"), index, new.nms1)
-  out.mrg <- out1
+  
+  if(!index %in% nms1) 
+    stop("index not found in data.frame")
+  
+  nms1.i <- intersect(nms1, names(outs[[2]])) ## Variables in common
+  
+  if(length(nms1.i) < 2) 
+    stop("No names in common between the data.frames")
+  
+  ## The line below drops irrelevant columns and brings index to the first column
+  out1 <- subset(out1, select = c(index, nms1.i[-which(nms1 == index)]))
+  new.nms1 <- paste0(names(out1), ".1") ## This simply adds a 1
+  out1.new.names <- gsub(paste0(index, ".1"), index, new.nms1) ## Rename Date.1 to Date
+  out.mrg <- stats::setNames(out1, out1.new.names) 
   
   for(i in 2:n.outs){
-    out.i <- subset(outs[[i]], select = nms1) ## This selects only those columns present in the first object
+    
+    ## This selects only those columns present in the first object
+    out.i <- subset(outs[[i]], 
+                    select = c(index, nms1.i[-which(nms1.i == index)])) 
     nms.i <- names(out.i)
     new.nms.i <- paste0(nms.i, ".", i)
     names(out.i) <- gsub(paste0(index, ".", i), index, new.nms.i)
     out.mrg <- merge(out.mrg, out.i, by = index)
+    
+    if(nrow(out.mrg) < 1){
+      stop("No data in common between data frames")
+    }
   }
   
   ## Calculate bias for all variables
   if(missing(variable)){
-    var.sel <- setdiff(nms1, index) ## All variables except index
+    var.sel <- setdiff(nms1.i, index) ## All variables except index
     gvar.sel <- paste0(var.sel, collapse = "|")
     idx.out.mrg <- grep(gvar.sel, names(out.mrg))
     out.mrg.s <- out.mrg[, idx.out.mrg]
@@ -85,7 +104,7 @@ compare_apsim <- function(...,
       for(j in 2:ncol(tmp)){
         cat(names(tmp)[j - 1], " vs. ", names(tmp)[j], "\n")
         if(!missing(labels))cat("labels", labels[j - 1], " vs. ", labels[j], "\n")
-        fm0 <- lm(tmp[, j - 1] ~ tmp[, j])
+        fm0 <- lm(tmp[, j] ~ tmp[, j - 1])
         cat(" \t Bias: ", sum(tmp[, j - 1] - tmp[, j]), "\n")
         cat(" \t Intercept: ", coef(fm0)[1], "\n")
         cat(" \t Slope: ", coef(fm0)[2], "\n")
@@ -93,6 +112,7 @@ compare_apsim <- function(...,
         cat(" \t RMSE: ", sigma(fm0), "\n")
         cat(" \t R^2: ", summary(fm0)$r.squared, "\n")
         cat(" \t Corr: ", cor(tmp[, j - 1], tmp[, j]), "\n")
+        cat(" \t Con. Corr: ", con_cor(tmp[, j - 1], tmp[, j]), "\n")
         cat(" \t ME: ", mod_eff(tmp[, j - 1], tmp[, j]), "\n")
 
       }
@@ -117,6 +137,7 @@ compare_apsim <- function(...,
       cat(" \t RMSE: ", sigma(fm0), "\n")
       cat(" \t R^2: ", summary(fm0)$r.squared, "\n")
       cat(" \t Corr: ", cor(tmp[,j - 1], tmp[, j]), "\n")
+      cat(" \t Con. Corr: ", con_cor(tmp[, j - 1], tmp[, j]), "\n")
       cat(" \t ME: ", mod_eff(tmp[, j-1], tmp[, j]), "\n")
     }
   }
@@ -132,10 +153,10 @@ compare_apsim <- function(...,
 #' @rdname compare_apsim
 #' @description plotting function for compare_apsim, it requires ggplot2
 #' @param x object of class \sQuote{out_mrg}
-#' @param ... additional arguments, can be passed to certain ggplot2 functions
+#' @param ... data frames with APSIM output or observed data. 
 #' @param plot.type either \sQuote{vs}, \sQuote{diff}, \sQuote{ts} - for time series or \sQuote{density}
 #' @param pairs pair of objects to compare, defaults to 1 and 2 but others are possible
-#' @param cummulative whether to plot cummulative values (default FALSE)
+#' @param cumulative whether to plot cummulative values (default FALSE)
 #' @param variable variable to plot 
 #' @param id identification (not implemented yet)
 #' @param span argument passed to \sQuote{geom_smooth}
@@ -143,7 +164,7 @@ compare_apsim <- function(...,
 #' 
 plot.out_mrg <- function(x, ..., plot.type = c("vs", "diff", "ts", "density"),
                          pairs = c(1, 2),
-                         cummulative = FALSE, ## Might not make sense for these type of graphs...
+                         cumulative = FALSE, ## Might not make sense for these type of graphs...
                          variable,
                          id, span = 0.75){
   
@@ -168,10 +189,10 @@ plot.out_mrg <- function(x, ..., plot.type = c("vs", "diff", "ts", "density"),
   
   plot.type <- match.arg(plot.type)
   
-  if(cummulative && plot.type != "ts") 
-    stop("cummulative is only available for plot.type = 'ts' ")
+  if(cumulative && plot.type != "ts") 
+    stop("cumulative is only available for plot.type = 'ts' ")
   
-  if(plot.type == "vs" && !cummulative){
+  if(plot.type == "vs" && !cumulative){
     tmp <- x[, grep(variable, names(x))]
     prs <- paste0(variable, ".", pairs)
     gp1 <- ggplot2::ggplot(data = tmp, ggplot2::aes(x = eval(parse(text = eval(prs[1]))), 
@@ -186,7 +207,7 @@ plot.out_mrg <- function(x, ..., plot.type = c("vs", "diff", "ts", "density"),
     
   }
   
-  if(plot.type == "diff" && !cummulative){
+  if(plot.type == "diff" && !cumulative){
     
     prs0 <- paste0(variable, ".", pairs)
     prs <- paste0(prs0, collapse = "|")
@@ -207,7 +228,7 @@ plot.out_mrg <- function(x, ..., plot.type = c("vs", "diff", "ts", "density"),
     print(gp1)   
   }
   
-  if(plot.type == "ts" && !cummulative){
+  if(plot.type == "ts" && !cumulative){
   
     prs0 <- paste0(variable, ".", pairs)
     prs <- paste0(prs0, collapse = "|")
@@ -232,7 +253,7 @@ plot.out_mrg <- function(x, ..., plot.type = c("vs", "diff", "ts", "density"),
     print(gp1)   
   }
   
-  if(plot.type == "ts" && cummulative){
+  if(plot.type == "ts" && cumulative){
     
     prs0 <- paste0(variable, ".", pairs)
     prs <- paste0(prs0, collapse = "|")
@@ -249,7 +270,7 @@ plot.out_mrg <- function(x, ..., plot.type = c("vs", "diff", "ts", "density"),
       ggplot2::geom_line(ggplot2::aes(y = .data[["cum_var2"]],
                                       color = paste(o.nms[pairs[2]], prs0[2]))) + 
       ggplot2::xlab(index) + 
-      ggplot2::ylab(paste("Cummulative ", variable)) + 
+      ggplot2::ylab(paste("Cumulative ", variable)) + 
       ggplot2::theme(legend.title = ggplot2::element_blank())
     
     print(gp1)   
@@ -279,5 +300,14 @@ mod_eff <- function(x, y){
   sse <- sum((x - y)^2)
   ssx <- sum((x - mean(x))^2)
   ans <- 1 - sse / ssx
+  ans
+}
+
+## Concordance correlation
+## https://en.wikipedia.org/wiki/Concordance_correlation_coefficient
+con_cor <- function(x, y){
+  num <- 2 * cor(x, y) * sd(x) * sd(y)
+  den <- var(x) + var(y) + (mean(x) - mean(y))^2
+  ans <- num/den
   ans
 }

@@ -4,7 +4,13 @@
 \alias{get_iemre_apsim_met}
 \title{Get weather data from Iowa Environmental Mesonet Reanalysis}
 \usage{
-get_iemre_apsim_met(lonlat, dates, wrt.dir = ".", filename = NULL)
+get_iemre_apsim_met(
+  lonlat,
+  dates,
+  wrt.dir = ".",
+  filename = NULL,
+  fillin.radn = FALSE
+)
 }
 \arguments{
 \item{lonlat}{Longitude and latitude vector}
@@ -14,6 +20,8 @@ get_iemre_apsim_met(lonlat, dates, wrt.dir = ".", filename = NULL)
 \item{wrt.dir}{write directory}
 
 \item{filename}{file name for writing out to disk}
+
+\item{fillin.radn}{whether to fill in radiation data using the nasapower pacakge. Default is FALSE.}
 }
 \description{
 Retrieves weather data from Iowa Environmental Mesonet Reanalysis into an APSIM met file
@@ -25,12 +33,24 @@ If the filename is not provided it will not write the file to disk,
 but it will return an object of class \sQuote{met}. This is useful in case manipulation
 is required before writing to disk.
 }
+\note{
+Multi-year query is not supported for this product.
+}
 \examples{
 \dontrun{
 ## This will not write a file to disk
 iemre <- get_iemre_apsim_met(lonlat = c(-93,42), dates = c("2012-01-01","2012-12-31"))
-## Note that solar radiation is not available
+## Note that solar radiation is not available, but can be filled in
+## using the nasapower package
+iemre2 <- get_iemre_apsim_met(lonlat = c(-93,42), 
+                             dates = c("2012-01-01","2012-12-31"), 
+                             fillin.radn = TRUE)
 summary(iemre)
+summary(iemre2)
+
+## Still it is important to check this object
+## Since there is one day with missing solar radiation
+check_apsim_met(iemre2)
 }
 
 }

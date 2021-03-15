@@ -134,20 +134,24 @@ read_apsim_met <- function(file, src.dir = ".", verbose = TRUE){
 
 write_apsim_met <- function(met, wrt.dir = NULL, filename = NULL){
   
-  if(attr(met, "filename") != "noname.met") filename <- attr(met, "filename")
+  if(attr(met, "filename") != "noname.met" && is.null(filename)) filename <- attr(met, "filename")
     
-  if(missing(wrt.dir) && is.null(filename)){
+  if(is.null(wrt.dir) && is.null(filename)){
     ## This assumes that the full path is in filename
     file.path <- attr(met, "filename")
   }
-  if(!missing(wrt.dir) && is.null(filename)){
-    stop("Need to supply filename if 'wrt.dir' is not NULL")
+  if(!is.null(wrt.dir) && is.null(filename)){
+    if(attr(met, "noname.met")){
+      stop("Need to supply filename if 'wrt.dir' is not NULL")
+    }else{
+     file.path <- file.path(wrt.dir, attr(met, "filename")) 
+    }
   }
-  if(missing(wrt.dir) && !is.null(filename)){
+  if(is.null(wrt.dir) && !is.null(filename)){
     stop("Need to supply 'wrt.dir' if filename is not NULL")
   }
-  if(!missing(wrt.dir) && !is.null(filename)){
-    file.path <- paste0(wrt.dir, "/", filename)
+  if(!is.null(wrt.dir) && !is.null(filename)){
+    file.path <- file.path(wrt.dir, filename)
   }
   if(!is.null(filename)){
     if(!grepl(".met", filename, fixed=TRUE)) stop("filename should end in .met")
@@ -432,3 +436,82 @@ napad_apsim_met <- function(met){
   class(ans) <- c("met","data.frame")
   return(ans) 
 }
+
+
+
+
+#' Simple utility for converting a data frame to an object of class met
+#' 
+#' @title Conversion from data frame to met object
+#' @name as_apsim_met
+#' @description It makes minimum assumptions about the data so it is recommended to change defaults
+#' @param x object of class \sQuote{data frame}
+#' @param filename default \sQuote{noname.met}
+#' @param site default \sQuote{nosite}
+#' @param latitude default is zero (0)
+#' @param longitude default is zero (0)
+#' @param tav average temperature (calculated if not supplied)
+#' @param amp temperature amplitude (calculated if not supplied)
+#' @param colnames default are \dQuote{year}, \dQuote{day}, \dQuote{radn}, 
+#'                  \dQuote{maxt}, \dQuote{mint}, \dQuote{rain}
+#' @param units default are \dQuote{()}, \dQuote{()}, \dQuote{(MJ/m2/day)},
+#'              \dQuote{(oC)}, \dQuote{(oC)}, \dQuote{(mm)}
+#' @param constants default is \dQuote{NA}
+#' @param comments default is \dQuote{NA}   
+#' @param check whether to check the resulting met file using \code{\link{check_apsim_met}}.
+#' default is TRUE.     
+#' @export
+#' 
+as_apsim_met <- function(x,
+                         filename = "noname.met",
+                         site = "nosite",
+                         latitude = 0,
+                         longitude = 0,
+                         tav = NA,
+                         amp = NA,
+                         colnames = c("year", "day", "radn", "maxt", "mint", "rain"),
+                         units = c("()", "()", "(MJ/m2/day)", "(oC)", "(oC)", "(mm)"),
+                         constants = NA,
+                         comments = NA,
+                         check = TRUE){
+  
+  if(!inherits(x, "data.frame"))
+    stop("Object should be of class data.frame")
+
+  if(ncol(x) != 6)
+    stop("If number of columns is not 6 then provide column names")
+  
+  names(x) <- colnames
+  
+  attr(x, "filename") <- filename
+  attr(x, "site") <- paste("site =", site)
+  attr(x, "latitude") <- paste("latitude =", latitude)
+  attr(x, "longitude") <- paste("longitude =", longitude)
+  
+  if(is.na(tav)){
+    tav <- mean(colMeans(x[,c("maxt","mint")], na.rm=TRUE), na.rm=TRUE)
+    attr(x, "tav") <- paste("tav =", tav, "(oC) ! annual average ambient temperature")  
+  }else{
+    attr(x, "tav") <- tav
+  }
+  
+  if(is.na(amp)){
+    attr(x, "amp") <- paste("amp =", mean(x$maxt, na.rm=TRUE) - mean(x$mint, na.rm = TRUE), "(oC) ! annual amplitude in mean monthly temperature")  
+  }else{
+    attr(x, "amp") <- amp  
+  }
+  
+  attr(x, "colnames") <- colnames
+  attr(x, "units") <- units
+  attr(x, "constants") <- constants
+  attr(x, "comments") <- comments
+  class(x) <- c("met","data.frame")
+  
+  if(check) apsimx::check_apsim_met(x)
+  
+  return(x) 
+}
+  
+  
+  
+  

@@ -8,20 +8,32 @@
 #' @param dates date ranges
 #' @param wrt.dir write directory
 #' @param filename file name for writing out to disk
+#' @param fillin.radn whether to fill in radiation data using the nasapower pacakge. Default is FALSE.
 #' @details If the filename is not provided it will not write the file to disk, 
 #' but it will return an object of class \sQuote{met}. This is useful in case manipulation
 #' is required before writing to disk.
+#' @note Multi-year query is not supported for this product. 
 #' @export
 #' @examples 
 #' \dontrun{
 #' ## This will not write a file to disk
 #' iemre <- get_iemre_apsim_met(lonlat = c(-93,42), dates = c("2012-01-01","2012-12-31"))
-#' ## Note that solar radiation is not available
+#' ## Note that solar radiation is not available, but can be filled in
+#' ## using the nasapower package
+#' iemre2 <- get_iemre_apsim_met(lonlat = c(-93,42), 
+#'                              dates = c("2012-01-01","2012-12-31"), 
+#'                              fillin.radn = TRUE)
 #' summary(iemre)
+#' summary(iemre2)
+#' 
+#' ## Still it is important to check this object
+#' ## Since there is one day with missing solar radiation
+#' check_apsim_met(iemre2)
 #' }
 #' 
 
-get_iemre_apsim_met <- function(lonlat, dates, wrt.dir=".", filename=NULL){
+get_iemre_apsim_met <- function(lonlat, dates, wrt.dir=".", filename=NULL,
+                                fillin.radn = FALSE){
   
   if(missing(filename)) filename <- "noname.met"
   
@@ -33,25 +45,29 @@ get_iemre_apsim_met <- function(lonlat, dates, wrt.dir=".", filename=NULL){
   day1 <- as.character(as.Date(dates[1]))
   dayn <- as.character(as.Date(dates[2]))
   
+  yr1 <- as.numeric(format(as.Date(dates[1]), "%Y"))
+  yr2 <- as.numeric(format(as.Date(dates[2]), "%Y"))
+  
+  if(yr2 > yr1) stop("Multi-year queries are not supported at the moment. See the source.")
+  
   ## Longitude and latitude
   lon <- as.numeric(lonlat[1])
   lat <- as.numeric(lonlat[2])
   
-  str1 <- paste0(str0,day1,"/",dayn,"/",lat,"/",lon,"/json")
+  str1 <- paste0(str0, day1, "/", dayn, "/", lat, "/", lon, "/json")
   
   iem.json <- jsonlite::fromJSON(str1)
   
   iem.dat <- as.data.frame(iem.json[[1]])
   
-  iem.dat$year <- format(as.Date(iem.dat$date),"%Y")
+  iem.dat$year <- as.numeric(format(as.Date(iem.dat$date),"%Y"))
   
   iem.dat$radn <- NA
   
   ## Dates sequence
-  dates.seq <- seq(from = as.Date(dates[1]), to = as.Date(dates[2]),
-                   length.out = nrow(iem.dat))
+  dates.seq <- seq(from = as.Date(dates[1]), to = as.Date(dates[2]), by = "day")
   
-  iem.dat$day <- format(dates.seq, "%j")
+  iem.dat$day <- as.numeric(format(dates.seq, "%j"))
   
   iem.dat$daily_high_c <- (iem.dat$daily_high_f - 32) * (5/9)
   iem.dat$daily_low_c <- (iem.dat$daily_low_f - 32) * (5/9)
@@ -63,23 +79,38 @@ get_iemre_apsim_met <- function(lonlat, dates, wrt.dir=".", filename=NULL){
                                          "daily_low_c",
                                          "daily_precip_mm"))
   
-
+  if(fillin.radn){
+    if(!requireNamespace("nasapower", quietly = TRUE)){
+      warning("The nasapower package is required for this function")
+      return(NULL)
+    }
+    pwr <- get_power_apsim_met(lonlat = lonlat, 
+                               dates = as.Date(c(paste0(yr1, "-01-01"), paste0(yr2, "-12-31"))))
+    pwr$date <- as.Date(c(1:nrow(pwr)-1), origin = paste0(yr1,"-01-01"))
+    pwr <- subset(pwr, date >= as.Date(day1) & date <= as.Date(dayn))
+    
+    if(nrow(iem.dat2) != nrow(pwr))
+      stop("Something went wrong. Number of rows do not match.")
+    
+    iem.dat2$radn <- pwr$radn
+  }
+  
   names(iem.dat2) <- c("year","day","radn","maxt","mint","rain")
   units <- c("()","()","(MJ/m2/day)","(oC)","(oC)","(mm)")
   
-  comments <- paste("!data from IEM Reanalysis. retrieved: ",Sys.time())
+  comments <- paste("!data from IEM Reanalysis. retrieved: ", Sys.time())
   
   attr(iem.dat2, "filename") <- filename
   attr(iem.dat2, "site") <- paste("site = ", sub(".met","", filename, fixed = TRUE))
-  attr(iem.dat2, "latitude") <- paste("latitude =",lonlat[2])
-  attr(iem.dat2, "longitude") <- paste("longitude =",lonlat[1])
-  attr(iem.dat2, "tav") <- paste("tav =",mean(colMeans(iem.dat2[,c("maxt","mint")],na.rm=TRUE),na.rm=TRUE))
+  attr(iem.dat2, "latitude") <- paste("latitude =", lonlat[2])
+  attr(iem.dat2, "longitude") <- paste("longitude =", lonlat[1])
+  attr(iem.dat2, "tav") <- paste("tav =",mean(colMeans(iem.dat2[,c("maxt","mint")], na.rm=TRUE), na.rm=TRUE))
   attr(iem.dat2, "amp") <- paste("amp =",mean(iem.dat2$maxt, na.rm=TRUE) - mean(iem.dat2$mint, na.rm = TRUE))
   attr(iem.dat2, "colnames") <- names(iem.dat2)
   attr(iem.dat2, "units") <- units
   attr(iem.dat2, "comments") <- comments
   ## No constants
-  class(iem.dat2) <- c("met","data.frame")
+  class(iem.dat2) <- c("met", "data.frame")
   
   if(filename != "noname.met"){
     write_apsim_met(iem.dat2, wrt.dir = wrt.dir, filename = filename)

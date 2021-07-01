@@ -335,15 +335,23 @@ read_apsim <- function(file = "", src.dir = ".",
   
   file.name.path <- paste0(src.dir, "/", file, ".out")
   
+  ## How many rows to skip might be title plus one
+  rdlns <- readLines(con = file.name.path, n = 6)
+  for(i in 1:5){
+    if(grepl("^Title =", rdlns[i])){
+      skip.out.lines <- i
+    }    
+  }
+
   ## Read output file
   hdr <- as.character(sapply(as.vector(read.table(file = file.name.path, 
                                                   header = FALSE,
                                                   sep = "", 
                                                   nrows = 1, 
-                                                  skip = 2)[1,]), 
+                                                  skip = skip.out.lines)[1,]), 
                              FUN = function(x) x[[1]]))
-  
-  out.file <- read.table(file = file.name.path, header = FALSE, sep = "", skip = 4)
+
+  out.file <- read.table(file = file.name.path, header = FALSE, sep = "", skip = c(skip.out.lines + 2))
   
   if(length(hdr) != dim(out.file)[2]){
     cat("length header", length(hdr), " number of columns", dim(out.file)[2], "\n")
@@ -353,10 +361,18 @@ read_apsim <- function(file = "", src.dir = ".",
   names(out.file) <- hdr
   ## Read summary file
   file.name.summary <- paste0(src.dir, "/", file, ".sum")
-  sum.file <- readLines(con = file.name.summary)
+  sum.file <- try(readLines(con = file.name.summary), silent = TRUE)
+  if(inherits(sum.file, "try-error")) stop("Could not find summary file")
   
-  if(any(grepl("Date",hdr))){
-    out.file$Date <- try(as.Date(out.file$Date, format = date.format), silent=TRUE)
+  if(any(grepl("Date", hdr, ignore.case = TRUE))){
+    wcid <- grep("Date", hdr, ignore.case = TRUE) ## The short name stands for 'which column is date'
+    try.date <- try(as.Date(out.file[,wcid], format = date.format), silent=TRUE)
+    
+    if(inherits(try.date, "try-error")){
+      warning("Could not create Date column")
+    }else{
+      out.file$Date <- try.date   
+    }
   }
   ## Return list
   if(value == "all"){

@@ -125,7 +125,7 @@ inspect_apsim <- function(file = "", src.dir = ".",
   file <- match.arg(file, file.names)
   
   ## Read the file
-  apsim_xml <- xml2::read_xml(paste0(src.dir, "/", file))
+  apsim_xml <- xml2::read_xml(file.path(src.dir, file))
   
   ## This is my attempt at picking the right node in a factorial
   if(!missing(root)){
@@ -267,27 +267,50 @@ inspect_apsim <- function(file = "", src.dir = ".",
         soil.d[,j] <- xml2::xml_double(xml2::xml_children(soil.water.node))
         j <- j + 1
       }
-      
-      ## Soil Water
+
       soil.water.parms <- c("SummerCona", "SummerU", "SummerDate",
                             "WinterCona", "WinterU", "WinterDate",
                             "DiffusConst","DiffusSlope", "Salb",
                             "CN2Bare","CNRed","CNCov")
- 
-      soil.water.d <- data.frame(soil.water = soil.water.parms,
-                                 value = NA)
-      j <- 1
-      for(i in soil.water.parms){
-        parm.path.0 <- ".//Soil/SoilWater"
-        parm.path.1 <- paste0(parm.path.0, "/", i)
-        soil.water.node <- xml2::xml_find_first(apsim_xml, parm.path.1)
-        soil.water.d[j,"value"] <- xml2::xml_text(soil.water.node)
-        j <- j + 1
-      }
       
+      soil.water.xparms <- c("Slope", "Discharge", "CatchmentArea", "MaximumPond")
+      
+      soil.water.parms.soilwat <- c("Thickness", "SWCON", "MWCON", "KLAT")
+      
+      soilwat.present <- FALSE
+      ## Soil Water, but only when it is present because of SWIM        
+      if(length(xml2::xml_find_all(apsim_xml, ".//Soil/SoilWater")) > 0){
+        
+        soilwat.present <- TRUE
+        soil.water.d <- data.frame(soil.water = soil.water.parms,
+                                   value = NA)
+        j <- 1
+        for(i in soil.water.parms){
+          parm.path.0 <- ".//Soil/SoilWater"
+          parm.path.1 <- paste0(parm.path.0, "/", i)
+          soil.water.node <- xml2::xml_find_first(apsim_xml, parm.path.1)
+          soil.water.d[j,"value"] <- xml2::xml_text(soil.water.node)
+          j <- j + 1
+        }
+
+        soil.thickness.sw <- as.numeric(xml2::xml_text(xml2::xml_children(xml2::xml_find_first(apsim_xml, ".//Soil/SoilWater/Thickness"))))
+        
+        soil.water.soilwat.d <- data.frame(Thickness = rep(NA, length(soil.thickness.sw)), 
+                                           SWCON = NA, MWCON = NA, KLAT = NA)
+        
+        for(i in soil.water.parms.soilwat){
+          parm.path.0 <- ".//Soil/SoilWater"
+          parm.path.1 <- paste0(parm.path.0, "/", i)
+          soil.water.node.soilwat <- xml2::xml_find_first(apsim_xml, parm.path.1)
+          if(length(soil.water.node.soilwat) == 0) next
+          soil.water.soilwat.d[[i]] <- xml2::xml_double(xml2::xml_children(soil.water.node.soilwat))
+        }
+      }
+
       if(missing(parm)){
         print(knitr::kable(cbind(crop.d,soil.d), digits = digits))  
-        print(knitr::kable(soil.water.d, digits = digits))
+        if(soilwat.present) print(knitr::kable(soil.water.d, digits = digits))
+        if(soilwat.present) print(knitr::kable(soil.water.soilwat.d, digits = digits))
       }else{
         found.parm <- FALSE
         ## parm is either a list or a string and it is in crop.parms or crop.names
@@ -327,6 +350,13 @@ inspect_apsim <- function(file = "", src.dir = ".",
           parm.path.0 <- ".//Soil/SoilWater"
           parm.path.1 <- paste0(parm.path.0, "/", parm)
           print(knitr::kable(soil.water.d[soil.water.d$soil.water == parm,], digits = digits)) 
+          found.parm <- TRUE
+        }
+        ## parm is in 'soil.water.parms.soilwat'
+        if(length(parm) == 1 && parm %in% soil.water.parms.soilwat){
+          parm.path.0 <- ".//Soil/SoilWater"
+          parm.path.1 <- paste0(parm.path.0, "/", parm)
+          print(knitr::kable(subset(soil.water.soilwat.d, select = parm), digits = digits)) 
           found.parm <- TRUE
         }
         if(!found.parm) stop("parm not found")
@@ -599,6 +629,27 @@ inspect_apsim <- function(file = "", src.dir = ".",
     }
   }
   
+  if(node == "Outputfile"){
+    outputfile.node <- xml2::xml_find_all(apsim_xml, ".//outputfile")
+    outputfile.parms <- c("filename", "title", "variables", "events")
+    parm <- match.arg(parm, outputfile.parms)
+    
+    if(parm == "filename" || parm == "title"){
+      output.node <- xml2::xml_find_first(outputfile.node, parm)
+      output.name <- xml2::xml_text(output.node)
+      tmpdat <- data.frame(tmp = output.name)
+    }
+    
+    if(parm == "variables" || parm == "events"){
+      variables.node <- xml2::xml_find_all(outputfile.node, parm)
+      variables.names <- xml2::xml_text(xml2::xml_children(variables.node))
+      tmpdat <- data.frame(tmp = variables.names)
+    }
+    
+    names(tmpdat) <- parm
+    print(knitr::kable(tmpdat))
+  }
+  
   if(node == 'Other'){
     if(missing(parm)){
       stop("parm should be specified when node = 'Other'")
@@ -644,13 +695,16 @@ inspect_apsim <- function(file = "", src.dir = ".",
 #'
 #' @title Inspect an APSIM Classic auxiliary (XML) file
 #' @name inspect_apsim_xml
-#' @description inspect an auxilliary XML apsim file. 
+#' @description inspect an auxiliary XML apsim file. 
 #' @param file file ending in .xml to be inspected.
 #' @param src.dir directory containing the .xml file to be inspected; defaults to the current working directory
 #' @param parm parameter to inspect.
 #' @param verbose Whether to print to standard output
 #' @param print.path Whether to print the parameter path
-#' @return absolute parameter path
+#' @note the behavior has changed from previous verions (earlier than 1.977). Before,
+#' if more than match was found it would return an error. Now it returns a list with all
+#' possible matches. This can be useful when trying to find a parameter.
+#' @return absolute parameter path(s)
 #' @export
 #' @examples  
 #' \donttest{
@@ -686,21 +740,38 @@ inspect_apsim_xml <- function(file = "",
   
   find.all <- xml2::xml_find_all(apsim_xml, paste0(".//", parm))
   
-  if(length(find.all) > 1) stop("found multiple matching parameters")
+  if(length(find.all) > 1){
+    parm.path <- character(length = length(find.all))
+    for(i in seq_along(find.all)){
+      if(verbose){
+        cat("attrs:", xml2::xml_attrs(find.all[[i]], "*"), "\n")
+        length.xml.node <- xml2::xml_length(find.all[[i]])
+        if(length.xml.node == 1){
+          cat("text:", xml2::xml_text(find.all[[i]]), "\n")    
+        }else{
+          cat("text:", xml2::xml_text(xml2::xml_children(find.all[[i]])), "\n")    
+        }        
+      }
+      parm.path[i] <- xml2::xml_path(find.all[i])
+    }
+    if(print.path) cat("path:", unlist(parm.path), "\n")
+  } 
     
-  xml_node <- xml2::xml_find_first(apsim_xml, paste0(".//", parm))
-  
-  parm.path <- xml2::xml_path(xml_node)
-  
-  if(verbose){
-    cat("attrs:", xml2::xml_attrs(xml_node, "*"), "\n")
-    cat("text:", xml2::xml_text(xml_node), "\n")  
+  if(length(find.all) == 1){
+    xml_node <- xml2::xml_find_first(apsim_xml, paste0(".//", parm))
+    parm.path <- xml2::xml_path(xml_node)
+    if(verbose){
+      cat("attrs:", xml2::xml_attrs(xml_node, "*"), "\n")
+      length.xml.node <- xml2::xml_length(xml_node)
+      if(length.xml.node <= 1){
+        cat("text:", xml2::xml_text(xml_node), "\n")    
+      }else{
+        cat("text:", xml2::xml_text(xml2::xml_children(xml_node)), "\n")    
+      }
+    }
+    if(print.path) cat("path:", parm.path, "\n")
   }
-  
-  if(print.path) cat("path:", parm.path, "\n")
-    
   invisible(parm.path)
-  
 }
 
 #' view APSIM XML file

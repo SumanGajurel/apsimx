@@ -71,7 +71,7 @@
 
 edit_apsimx <- function(file, src.dir = ".", wrt.dir = NULL,
                         node = c("Clock", "Weather", "Soil", "SurfaceOrganicMatter", "MicroClimate", "Crop", "Manager","Other"),
-                        soil.child = c("Metadata", "Water", "Organic", "Physical", "Analysis", "Chemical", "InitialWater", "Sample"),
+                        soil.child = c("Metadata", "Water", "SoilWater", "Organic", "Physical", "Analysis", "Chemical", "InitialWater", "Sample"),
                         manager.child = NULL,
                         parm = NULL, value = NULL, 
                         overwrite = FALSE,
@@ -101,7 +101,7 @@ edit_apsimx <- function(file, src.dir = ".", wrt.dir = NULL,
     stop("This function only edits JSON files")
   
   ## Parse apsimx file (JSON)
-  apsimx_json <- jsonlite::read_json(paste0(src.dir, "/", file))
+  apsimx_json <- jsonlite::read_json(file.path(src.dir, file))
   
   ## Where is the 'Core' simulation?
   wcore <- grep("Core.Simulation", apsimx_json$Children)
@@ -193,33 +193,72 @@ edit_apsimx <- function(file, src.dir = ".", wrt.dir = NULL,
                           "Latitude", "Longitude", "LocationAccuracy", "DataSource",
                           "Comments")
       if(!all(parm %in% metadata.parms)) stop("parm name(s) might be wrong")
-      for(i in parm){
+      for(i in seq_along(parm)){
         soil.node[[1]][[parm[i]]] <- value[i]
       }
     }
   
     if(soil.child == "Water" || soil.child == "Physical"){
       edited.child <- soil.child
-      soil.water.node <- soil.node[[1]]$Children[[1]]
-      ## I select this one based on position, so problems
-      ## can arise
       
-      if(soil.water.node$Name != "Water" || soil.water.node$Name != "Physical"){
-        stop("Wrong node (Soil Water)")
+      wwn <- grep("^Water|Physical", sapply(soil.node[[1]]$Children, function(x) x$Name)) 
+      soil.water.node <- soil.node[[1]]$Children[[wwn]]
+
+      if(soil.water.node$Name != "Water" && soil.water.node$Name != "Physical"){
+        cat("Found: ", soil.water.node$Name, "instead of Physical or Water \n")
+        stop("Wrong node (Physical or Water)")
       }
       
       crop.parms <- c("XF", "KL", "LL")
       
-      if(parm %in% crop.parms ){
-        for(i in 1:length(soil.water.node$Children[[1]][[parm]])){
-          soil.water.node$Children[[1]][[parm]][[i]] <- value[i]
+      if(parm %in% crop.parms || any(sapply(crop.parms, function(x) grepl(x, parm)))){
+        ## Maybe we are trying to edit the parameter for a specific crop
+        ## The first options matches the parameter exactly 
+        if(parm %in% crop.parms){
+          for(i in seq_along(soil.water.node$Children[[1]][[parm]])){
+            soil.water.node$Children[[1]][[parm]][[i]] <- value[i]
+          }          
+        }else{
+         ## This assumes that the parameter to be edited is "Wheat LL" for example
+          parm0 <- strsplit(parm, " ")[[1]]
+          crop.name <- parm0[1]
+          sparm <- parm0[2]
+          wcnp <- which(gsub("Soil", "", sapply(soil.water.node$Children, function(x) x$Name)) == crop.name)
+          for(i in seq_along(soil.water.node$Children[[1]][[sparm]])){
+            soil.water.node$Children[[wcnp]][[sparm]][[i]] <- value[i]  
+          }
         }
       }else{
         for(i in 1:length(soil.water.node[[parm]])){
           soil.water.node[[parm]][[i]] <- value[i]
         }
       }
-      soil.node[[1]]$Children[[1]] <- soil.water.node
+      soil.node[[1]]$Children[[wwn]] <- soil.water.node
+    }
+    
+    if(soil.child == "SoilWater"){
+      edited.child <- soil.child
+      wswn <- grep("^SoilWater", sapply(soil.node[[1]]$Children, function(x) x$Name)) 
+      soil.soilwater.node <- soil.node[[1]]$Children[[wswn]]
+      
+      soilwat.parms <- c("SummerDate", "SummerU", "SummerCona", "WinterDate",
+                         "WinterU", "WinterCona", "DiffusConst", "DiffusSlope",
+                         "Salb", "CN2Bare", "CNRed", "CNCov", "Slope", "DischargeWidth",
+                         "CatchmentArea")
+      
+      if(parm %in% soilwat.parms){
+        ## This allows for editing multiple parameters and values
+        for(i in seq_along(parm)){
+          soil.soilwater.node[[parm[i]]] <- value[i]
+        }
+      }else{
+        ## This case is most likely SWCON
+        if(!parm %in% c("SWCON", "KLAT")) stop("parameter is likely incorrect")
+        for(i in 1:length(soil.soilwater.node[[parm]])){
+          soil.soilwater.node[[parm]][[i]] <- value[i]
+        }
+      }
+      soil.node[[1]]$Children[[wswn]] <- soil.soilwater.node
     }
     
     if(soil.child == "Nitrogen"){
@@ -416,42 +455,42 @@ edit_apsimx <- function(file, src.dir = ".", wrt.dir = NULL,
     ## Handling level 7
     if(upp.lngth == 7){
       n4 <- apsimx_json$Children[[wl3]]$Children[[wl4]]
-      wl5 <- grep(upp[5], n4$Children)
+      wl5 <- which(upp[5] == sapply(n4$Children, function(x) x$Name))
       n5 <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]
-      wl6 <- grep(upp[6], n4$Children)
+      wl6 <- which(upp[6] == sapply(n5$Children, function(x) x$Name))
       apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]][[upp[7]]] <- value
     }
     if(upp.lngth == 8){
       n4 <- apsimx_json$Children[[wl3]]$Children[[wl4]]
-      wl5 <- grep(upp[5], n4$Children)
+      wl5 <- which(upp[5] == sapply(n4$Children, function(x) x$Name))
       n5 <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]
-      wl6 <- grep(upp[6], n5$Children)
+      wl6 <- which(upp[6] == sapply(n5$Children, function(x) x$Name))
       n6 <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]]
-      wl7 <- grep(upp[7], n6$Children)
+      wl7 <- which(upp[7] == sapply(n6$Children, function(x) x$Name))
       apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]]$Children[[wl7]][[upp[8]]] <- value
     }
     if(upp.lngth == 9){
       n4 <- apsimx_json$Children[[wl3]]$Children[[wl4]]
-      wl5 <- grep(upp[5], n4$Children)
+      wl5 <- which(upp[5] == sapply(n4$Children, function(x) x$Name))
       n5 <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]
-      wl6 <- grep(upp[6], n5$Children)
+      wl6 <- which(upp[6] == sapply(n5$Children, function(x) x$Name))
       n6 <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]]
-      wl7 <- grep(upp[7], n6$Children)
+      wl7 <- which(upp[7] == sapply(n6$Children, function(x) x$Name))
       n7 <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]]$Children[[wl7]]
-      wl8 <- grep(upp[8], n7$Children)
+      wl8 <- which(upp[8] == sapply(n7$Children, function(x) x$Name))
       apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]]$Children[[wl7]]$Children[[wl8]][[upp[9]]] <- value
     }
     if(upp.lngth == 10){
       n4 <- apsimx_json$Children[[wl3]]$Children[[wl4]]
-      wl5 <- grep(upp[5], n4$Children)
+      wl5 <- which(upp[5] == sapply(n4$Children, function(x) x$Name))
       n5 <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]
-      wl6 <- grep(upp[6], n5$Children)
+      wl6 <- which(upp[6] == sapply(n5$Children, function(x) x$Name))
       n6 <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]]
-      wl7 <- grep(upp[7], n6$Children)
+      wl7 <- which(upp[7] == sapply(n6$Children, function(x) x$Name))
       n7 <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]]$Children[[wl7]]
-      wl8 <- grep(upp[8], n7$Children)
+      wl8 <- which(upp[8] == sapply(n7$Children, function(x) x$Name))
       n8 <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]]$Children[[wl7]]$Children[[wl8]]
-      wl9 <- grep(upp[9], n8$Children)
+      wl9 <- which(upp[9] == sapply(n8$Children, function(x) x$Name))
       apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]]$Children[[wl7]]$Children[[wl8]]$Children[[wl9]][[upp[10]]] <- value
     }
   }

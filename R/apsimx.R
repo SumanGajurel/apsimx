@@ -33,7 +33,7 @@ apsimx <- function(file = "", src.dir = ".",
   if(file == "") stop("need to specify file name")
   
   .check_apsim_name(file)
-  .check_apsim_name(src.dir)
+  .check_apsim_name(normalizePath(src.dir))
   
   ## The might offer suggestions in case there is a typo in 'file'
   file.names <- dir(path = src.dir, pattern=".apsimx$", ignore.case=TRUE)
@@ -99,7 +99,8 @@ auto_detect_apsimx <- function(){
         if(!is.na(apsimx::apsimx.options$exe.path) && apsimx::apsimx.options$warn.find.apsimx){
           warning("APSIM-X not found, but a custom one is present")
         }else{
-          stop("APSIM-X not found and no 'exe.path' exists.")
+          if(is.na(apsimx::apsimx.options$exe.path))
+            stop("APSIM-X not found and no 'exe.path' exists.")
         }
       }
       ## If only one version of APSIM-X is present
@@ -133,6 +134,7 @@ auto_detect_apsimx <- function(){
   
     if(grepl("Linux", Sys.info()[["sysname"]])){
       
+      apsimx.versions <- NULL
       find.apsim <- grep("apsim", list.files("/usr/local/lib"))
       ## What if length equals zero?
       if(length(find.apsim) == 0){
@@ -140,7 +142,8 @@ auto_detect_apsimx <- function(){
         if(!is.na(apsimx::apsimx.options$exe.path) && apsimx::apsimx.options$warn.find.apsimx){
           warning("APSIM-X not found, but a custom one is present")
         }else{
-          stop("APSIM-X not found and no 'exe.path' exists.")
+          if(is.na(apsimx::apsimx.options$exe.path))
+            stop("APSIM-X not found and no 'exe.path' exists.")  
         }
       }
       ## APSIM executable
@@ -344,9 +347,9 @@ apsimx_example <- function(example = "Wheat", silent = FALSE){
   ## Several examples are not supported because they do not use
   ## relative paths for the weather file
   ## Examples which do not run: Chicory
-  ex.ch <- c("Barley","ControlledEnvironment","Eucalyptus",
+  ex.ch <- c("Barley", "ControlledEnvironment", "Eucalyptus",
              "EucalyptusRotation",
-             "Maize","Oats","Sugarcane","Wheat")
+             "Maize", "Oats", "Rotation", "Sugarcane", "Wheat")
 
   example <- match.arg(example, choices = ex.ch)
   
@@ -358,7 +361,8 @@ apsimx_example <- function(example = "Wheat", silent = FALSE){
   ## Do not transfer permissions?
   file.copy(from = ex, to = tmp.dir, copy.mode = FALSE)
   
-  sim <- apsimx(paste0(example, ".apsimx"), src.dir = tmp.dir, value = "report")
+  sim <- apsimx(paste0(example, ".apsimx"), src.dir = tmp.dir, 
+                value = "report", simplify = FALSE)
 
   ## OS independent cleanup (risky?)
   file.remove(paste0(tmp.dir, "/", example, ".db"))

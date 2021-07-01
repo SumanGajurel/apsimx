@@ -39,6 +39,10 @@
 #' @param parm.vector.index Index to optimize a specific element of a parameter vector. At the moment it is
 #' possible to only edit one element at a time. This is because there is a conflict when generating multiple
 #' elements in the candidate vector for the same parameter.
+#' @param xml.parm optional logical vector used when optimizing parameters which are both in the .apsim file and in the \sQuote{crop.file}.
+#' If \sQuote{crop.file} is missing it is assumed that the paramters to be optimized are in the .apsim file. If \sQuote{crop.file} is
+#' not missing it is assumed that they are in the \sQuote{crop.file}. If the parameters are in both, this needs to be specified in 
+#' this argument.
 #' @param ... additional arguments to be passed to the optimization algorithm. If you want confidence intervals, then include \sQuote{hessian = TRUE}.
 #' @note When computing the objective function (residual sum-of-squares) different variables are combined.
 #' It is common to weight them since they are in different units. If the argument weights is not supplied
@@ -52,6 +56,7 @@ optim_apsim <- function(file, src.dir = ".",
                         type = c("optim", "nloptr","mcmc"), 
                         weights, index = "Date",
                         parm.vector.index,
+                        xml.parm,
                         ...){
   .check_apsim_name(file)
   
@@ -122,34 +127,65 @@ optim_apsim <- function(file, src.dir = ".",
   ## What this does, is pick the crop.file to be edited when it is not missing
   if(!missing(crop.file)){
     aux.file <- crop.file
-    cfile <- TRUE
+    if(missing(xml.parm)){
+      cfile <- rep(TRUE, length(parm.paths))  
+    }else{
+      cfile <- xml.parm
+    } 
   }else{
     aux.file <- file
-    cfile <- FALSE
+    if(missing(xml.parm)){
+      cfile <- rep(FALSE, length(parm.paths))
+    }else{
+      cfile <- xml.parm
+    } 
   }
   
-  ## Retrieve initial value vectors
-  aux.xml <- xml2::read_xml(file.path(src.dir, aux.file))
+  if(!is.logical(cfile) || length(cfile) != length(parm.paths))
+    stop("xml.parm should be a logical of length equal to parm.paths")
+  
+  ## Retrieve initial value vectors for the auxiliary file
   iaux.parms <- vector("list", length = length(parm.paths))
+  length.aux.parms <- numeric(length(parm.paths))
   names(iaux.parms) <- parm.paths
     
   for(i in seq_along(parm.paths)){
+    
+    if(cfile[i]){
+      aux.xml <- xml2::read_xml(file.path(src.dir, aux.file))    
+    }else{
+      aux.xml <- xml2::read_xml(file.path(src.dir, file))
+    }
+    
     xml.node <- xml2::xml_find_first(aux.xml, parm.paths[i])
-    aux.parm.text <- xml2::xml_text(xml.node)
-    aux.parm.value <- as.numeric(strsplit(aux.parm.text, "\\s+")[[1]])
+    length.xml.node0 <- xml2::xml_length(xml.node)
+    length.xml.node1 <- length(xml2::xml_text(xml.node))
+    length.xml.node <- max(length.xml.node0, length.xml.node1)
+    length.aux.parms[i] <- length.xml.node 
+    if(length.xml.node == 1){
+      aux.parm.text <- xml2::xml_text(xml.node)
+      aux.parm.value <- as.numeric(strsplit(aux.parm.text, "\\s+")[[1]])      
+    }else{
+      aux.parm.text <- xml2::xml_text(xml2::xml_children(xml.node))
+      aux.parm.value <- as.numeric(aux.parm.text)
+    }
     iaux.parms[[i]] <- aux.parm.value
   }    
   
-  obj_fun <- function(cfs, parm.paths, data, aux.file, 
+  obj_fun <- function(cfs, parm.paths, data, file, aux.file, 
                       iaux.parms, weights, index, 
                       parm.vector.index,
-                      cfile = TRUE){
+                      xml.parm){
     
     ## Need to edit the parameters in the crop file or the main simulation
     for(i in seq_along(cfs)){
       ## Retrieve the vector of current parameters
       if(parm.vector.index[i] <= 0){
-        mparm <- paste(iaux.parms[[i]] * cfs[i], collapse = " ")  
+        if(length.aux.parms[i] == 1){
+          mparm <- paste(iaux.parms[[i]] * cfs[i], collapse = " ")    
+        }else{
+          mparm <- iaux.parms[[i]] * cfs[i] 
+        }
       }else{
         pvi <- parm.vector.index[i]
         iaux.parms[[i]][pvi] <- iaux.parms[[i]][pvi] * cfs[i]
@@ -157,7 +193,7 @@ optim_apsim <- function(file, src.dir = ".",
       }
       
       ## Edit the specific parameters with the corresponding values
-      if(cfile){
+      if(xml.parm[i]){
         ## Here I'm editing an auxiliary file ending in .xml
         edit_apsim_xml(file = aux.file, 
                        src.dir = src.dir,
@@ -167,7 +203,7 @@ optim_apsim <- function(file, src.dir = ".",
                        verbose = FALSE)        
       }else{
         ## Here I'm editing the main simulation file .apsim
-        edit_apsim(file = aux.file, 
+        edit_apsim(file = file, 
                    node = "Other",
                    src.dir = src.dir,
                    parm.path = parm.paths[i],
@@ -206,11 +242,6 @@ optim_apsim <- function(file, src.dir = ".",
       sim.s <- subset(sim.s0, select = names(data))
     }
 
-    if(nrow(sim.s) != nrow(data)){
-      cat("Number of rows in data", nrow(data), "\n")
-      cat("Number of rows in subset simulation", nrow(sim.s), "\n")
-      stop("Number of rows in data does not equal number of rows in simulation")
-    }
     if(ncol(sim.s) != ncol(data)){
       cat("Number of columns in data", ncol(data), "\n")
       cat("Number of columns in subset simulation", ncol(sim.s), "\n")
@@ -232,24 +263,26 @@ optim_apsim <- function(file, src.dir = ".",
   rss <- obj_fun(cfs = rep(1, length(parm.paths)),
                  parm.paths = parm.paths,
                  data = data,
+                 file = file,
                  aux.file = aux.file,
                  iaux.parms = iaux.parms,
                  weights = weights,
                  index = index,
                  parm.vector.index = parm.vector.index,
-                 cfile = cfile)
+                 xml.parm = cfile)
   ## optimization
   if(type == "optim"){
     op <- stats::optim(par = rep(1, length(parm.paths)), 
                        fn = obj_fun, 
                        parm.paths = parm.paths, 
                        data = data, 
+                       file = file,
                        aux.file = aux.file, 
                        iaux.parms = iaux.parms,
                        weights = weights,
                        index = index,
                        parm.vector.index = parm.vector.index,
-                       cfile = cfile,
+                       xml.parm = cfile,
                        ...)    
   }
   
@@ -258,12 +291,13 @@ optim_apsim <- function(file, src.dir = ".",
                          eval_f = obj_fun,
                          parm.paths = parm.paths, 
                          data = data, 
+                         file = file, 
                          aux.file = aux.file, 
                          iaux.parms = iaux.parms,
                          weights = weights,
                          index = index,
                          parm.vector.index = parm.vector.index,
-                         cfile = cfile,
+                         xml.parm = cfile,
                          ...)
     op$par <- op$solution
     op$value <- op$objective 
@@ -291,7 +325,7 @@ optim_apsim <- function(file, src.dir = ".",
     assign('.iaux.parms', iaux.parms, mcmc.apsim.env)
     assign('.index', index, mcmc.apsim.env)
     assign('.parm.vector.index', parm.vector.index, mcmc.apsim.env)
-    assign('.cfile', cfile, mcmc.apsim.env)
+    assign('.xml.parm', xml.parm, mcmc.apsim.env)
     
     ## Pre-optimized log-likelihood
     pll <- log_lik2(cfs)
@@ -389,7 +423,7 @@ log_lik2 <- function(.cfs){
   .iaux.parms <- get('.iaux.parms', envir = mcmc.apsimx.env)
   .index <- get('.index', envir = mcmc.apsim.env)
   .parm.vector.index <- get('.parm.vector.index', envir = mcmc.apsim.env)
-  .cfile <- get('.cfile', envir = mcmc.apsim.env)
+  .xml.parm <- get('.xml.parm', envir = mcmc.apsim.env)
   
   for(i in seq_along(.cfs)){
     ## Retrieve the vector of current parameters
@@ -402,7 +436,7 @@ log_lik2 <- function(.cfs){
     }
     
     ## Edit the specific parameters with the corresponding values
-    if(.cfile){
+    if(.xml.parm[i]){
       ## Here I'm editing an auxiliary file ending in .xml
       edit_apsim_xml(file = .aux.file, 
                      src.dir = .src.dir,

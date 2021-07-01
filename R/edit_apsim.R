@@ -46,6 +46,29 @@
 #' edit_apsim("Millet", src.dir = extd.dir, wrt.dir = tmp.dir, 
 #'            node = "Clock",
 #'            parm = "start_date", value = "01/02/1940")
+#' 
+#' ## Editing all of the KL values for Millet
+#' pp.KL <- inspect_apsim_xml("Millet.apsim", src.dir = extd.dir, 
+#'                   parm = "SoilCrop[8]/KL")
+#'                  
+#' kls <- seq(0.08, 0.2, length.out = 11)
+#' 
+#' edit_apsim("Millet.apsim", 
+#'            src.dir = extd.dir,
+#'            wrt.dir = tmp.dir,
+#'            node = "Other", 
+#'            parm.path = pp.KL,
+#'            value = kls)
+#'            
+#' ## Check that it was properly edited
+#' 
+#' inspect_apsim("Millet-edited.apsim", 
+#'               src.dir = tmp.dir,
+#'               node = "Soil",
+#'               soil.child = "Water",
+#'               parm = "KL")
+#' 
+#'               
 #' }
 #' 
 
@@ -133,8 +156,12 @@ edit_apsim <- function(file, src.dir = ".", wrt.dir = NULL,
         parm.path <- paste0(".//Soil/Water/SoilCrop", "/", parm)
       }
       ## Second set of parameters are soil specific
-      if(parm %in% c("Thickness", "BD", "AirDry", "LL15", "DUL", "SAT", "KS")){
+      if(parm %in% c("Thickness", "BD", "AirDry", "LL15", "DUL", "SAT", "KS", "SWCON", "MWCON", "KLAT")){
         parm.path <- paste0(".//Soil/Water", "/", parm)
+      }
+      
+      if(parm %in% c("SWCON", "MWCON", "KLAT")){
+        parm.path <- paste0(".//Soil/SoilWater", "/", parm)
       }
       
       ## Soil Water
@@ -156,8 +183,13 @@ edit_apsim <- function(file, src.dir = ".", wrt.dir = NULL,
       }else{
         soil.water.node <- xml2::xml_find_first(apsim_xml, parm.path)
         if(check.length){
-          if(length(value) != length(xml2::xml_children(soil.water.node)))
-            stop("value vector of incorrect length")
+          if(length(value) != length(xml2::xml_children(soil.water.node))){
+            print(parm.path)
+            cat("Length of value:", length(value), "\n")
+            cat("Length of node: ", length(xml2::xml_children(soil.water.node)), "\n")
+            stop("value vector of incorrect length")            
+          }
+            
         }
         ## With this code it is still possible to provide an incorrect parameter
         ## Not sure...
@@ -354,7 +386,7 @@ edit_apsim <- function(file, src.dir = ".", wrt.dir = NULL,
       soil.Pools.Pool.node <- xml2::xml_find_first(apsim_xml, parm.path)
       
       if(check.length){
-        if(length(value) != length(soil.Pools.Pool.node))
+        if(length(value) != length(xml2::xml_text(soil.Pools.Pool.node)))
           stop("value vector of incorrect length")
       }
       
@@ -410,7 +442,20 @@ edit_apsim <- function(file, src.dir = ".", wrt.dir = NULL,
     
     if(length(other.node) == 0) stop("other node parameter not found")
     
-    xml2::xml_set_text(other.node, as.character(value))
+    length.other.node0 <- xml2::xml_length(other.node)
+    length.other.node1 <- length(xml2::xml_text(other.node))
+    length.other.node <- max(c(length.other.node0, length.other.node1))
+    
+    if(length(value) != length.other.node)
+      stop("Length of value should be equal to the vector you are trying to edit")
+    
+    if(length.other.node == 1){
+      xml2::xml_set_text(other.node, as.character(value))  
+    }else{
+      for(i in seq_len(length.other.node)){
+        xml2::xml_set_text(xml2::xml_children(other.node)[i], as.character(value[i]))  
+      }
+    }
   }
   
   if(overwrite == FALSE){

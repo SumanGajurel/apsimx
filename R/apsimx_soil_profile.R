@@ -45,7 +45,8 @@
 #' @param dist.parms parameter values for creating a profile. If a == 0 and b == 0 then \cr
 #' a constant value of 1 is used. If a == 0 and b != 0, then an exponential decay is used. \cr
 #' If a != 0 and b != 0 then the equation is \code{a*soil.layer*exp(-b*soil.layer)}.  
-#' @return a soil profile with class \sQuote{soil_profile} with elements \sQuote{soil} and \sQuote{crops} (for now)
+#' @return a soil profile with class \sQuote{soil_profile} with elements \sQuote{soil}, \sQuote{crops}, \sQuote{metadata},
+#' \sQuote{soilwat} and \sQuote{swim}.
 #' @export
 #' @examples 
 #' \dontrun{
@@ -582,5 +583,22 @@ check_apsimx_soil_profile <- function(x){
   if(min(soil$PH) <= 0) warning("PH is zero or negative")
   if(max(soil$PH) > 14) warning("PH is too high")
   
+  SATminusDUL <- soil$SAT - soil$DUL
+  DULminusLL <- soil$DUL - soil$LL
+  DULminuscrop.LL <- soil$DUL - soil$crop.LL
+  SATminusLL <- soil$SAT - soil$LL
+  
+  if(any(SATminusDUL <= 0))
+    warning("DUL cannot be greater than SAT")
+  
+  if(any(DULminusLL <= 0))
+    warning("LL cannot be greater than DUL")
+  
+  if(any(DULminuscrop.LL <= 0))
+    warning("crop.LL cannot be greater than DUL")
+
+  if(any(SATminusLL <= 0))
+    warning("LL cannot be greater than SAT")
+
   return(invisible(x))
 }

@@ -101,3 +101,52 @@ if(run.apsim.edit.millet){
                 node = "Weather",
                 root = "IA-CC_Canisteo_No-Cover")
 }
+
+run.apsimx.edit.maize.soil <- get(".run.local.tests", envir = apsimx.options)
+
+if(run.apsimx.edit.maize.soil){
+  
+  inspect_apsimx("Wheat.apsimx", src.dir = extd.dir, 
+                 node = "Soil", parm = "Site", print.path = TRUE)
+  
+  edit_apsimx("Wheat.apsimx", 
+              src.dir = extd.dir, wrt.dir = tmp.dir,
+              node = "Soil", soil.child = "Metadata", 
+              parm = "Site", value = "Ames")
+  
+  inspect_apsimx("Wheat-edited.apsimx", src.dir = tmp.dir, 
+                 node = "Soil")
+  
+}
+
+run.apsimx.edit.soil.soilwat <- get(".run.local.tests", envir = apsimx.options)
+
+if(run.apsimx.edit.soil.soilwat){
+
+  inspect_apsimx("Wheat.apsimx", src.dir = extd.dir, 
+                 node = "Soil", soil.child = "SoilWater", 
+                 parm = "SummerCona")
+    
+  edit_apsimx("Wheat.apsimx", 
+              src.dir = extd.dir, wrt.dir = tmp.dir,
+              node = "Soil", soil.child = "SoilWater", 
+              parm = "SummerCona", value = 6)
+  
+  inspect_apsimx("Wheat-edited.apsimx", src.dir = tmp.dir, 
+                 node = "Soil", soil.child = "SoilWater", 
+                 parm = "SummerCona")
+
+  pp <- inspect_apsimx("Wheat-edited.apsimx", src.dir = tmp.dir,
+                       node = "Soil", soil.child = "SoilWater",
+                       parm = "SummerCona", print.path = TRUE)  
+  
+  edit_apsimx("Wheat-edited.apsimx", 
+              src.dir = tmp.dir, wrt.dir = tmp.dir,
+              node = "Other", parm.path = pp, value = 7,
+              overwrite = TRUE)
+  
+  inspect_apsimx("Wheat-edited.apsimx", src.dir = tmp.dir, 
+                 node = "Soil", soil.child = "SoilWater", 
+                 parm = "SummerCona")
+  
+}

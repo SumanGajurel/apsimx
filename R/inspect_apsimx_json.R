@@ -32,6 +32,7 @@
 #' inspect_apsimx("Barley", src.dir = ex.dir, node = "MicroClimate")
 #' inspect_apsimx("Barley", src.dir = ex.dir, node = "Crop")
 #' inspect_apsimx("Barley", src.dir = ex.dir, node = "Manager")
+#' inspect_apsimx("Barley", src.dir = ex.dir, node = "Report")
 #' 
 #' ## Manager folder present
 #' extd.dir <- system.file("extdata", package = "apsimx")
@@ -42,7 +43,7 @@
 #'
 
 inspect_apsimx <- function(file = "", src.dir = ".", 
-                           node = c("Clock", "Weather", "Soil", "SurfaceOrganicMatter", "MicroClimate", "Crop", "Manager", "Other"),
+                           node = c("Clock", "Weather", "Soil", "SurfaceOrganicMatter", "MicroClimate", "Crop", "Manager","Report", "Other"),
                            soil.child = c("Metadata", "Water", "InitialWater",
                                           "Chemical", "Physical", "Analysis", "SoilWater",
                                           "InitialN", "CERESSoilTemperature", "Sample",
@@ -77,7 +78,7 @@ inspect_apsimx <- function(file = "", src.dir = ".",
   ## It looks like I need to 'find' the "Models.Core.Simulation" node
   fcsn <- grep("Models.Core.Simulation", apsimx_json$Children, fixed = TRUE)
   
-  if(length(fcsn) > 1){
+  if(length(fcsn) > 1 || !missing(root)){
     if(missing(root)){
       cat("Simulation structure: \n")
       str_list(apsimx_json)
@@ -111,6 +112,9 @@ inspect_apsimx <- function(file = "", src.dir = ".",
   if(node == "Clock"){
     wlc <- function(x) grepl("Clock", x$Name, ignore.case = TRUE)
     wlcl <- sapply(parent.node, FUN = wlc)
+    if(all(wlcl == FALSE)){
+      stop("Clock not found")
+    } 
     clock.node <- as.list(parent.node[wlcl])[[1]]
     start.name <- grep("start", names(clock.node), ignore.case = TRUE, value = TRUE)
     end.name <- grep("end", names(clock.node), ignore.case = TRUE, value = TRUE)
@@ -129,6 +133,9 @@ inspect_apsimx <- function(file = "", src.dir = ".",
     ## Extract the list which has a component Name == "Weather"
     wlw <- function(x) grepl("Weather", x$Name)
     wlwl <- sapply(parent.node, FUN = wlw)
+    if(all(wlwl == FALSE)){
+      stop("Weather not found")
+    }
     weather.node <- parent.node[wlwl]
     ## Select the string which has a met file
     gf1 <- function(x) grep(".met$", x, value = TRUE)
@@ -146,6 +153,9 @@ inspect_apsimx <- function(file = "", src.dir = ".",
   if(node == "Soil"){
     ## Which soils node
     wsn <- grepl("Models.Soils.Soil", core.zone.node)
+    if(all(wsn == FALSE)){
+      stop("Soil not found")
+    }
     soil.node <- core.zone.node[wsn]
     
     parm.path.2.1 <- paste0(parm.path.2, ".", soil.node[[1]]$Name)
@@ -279,6 +289,9 @@ inspect_apsimx <- function(file = "", src.dir = ".",
   if(node == "SurfaceOrganicMatter"){
     ## Which is 'SurfaceOrganicMatter'
     wsomn <- grepl("Models.Surface.SurfaceOrganicMatter", core.zone.node)
+    if(all(wsomn == FALSE)){
+      stop("SurfaceOrganicMatter not found")
+    }
     som.node <- core.zone.node[wsomn][[1]]
     
     parm.path <- paste0(parm.path.2,".",som.node$Name)
@@ -293,6 +306,9 @@ inspect_apsimx <- function(file = "", src.dir = ".",
   if(node == "MicroClimate"){
     ## Which is 'MicroClimate'
     wmcn <- grepl("Models.MicroClimate", core.zone.node)
+    if(all(wmcn == FALSE)){
+      stop("MicroClimate not found")
+    }
     microclimate.node <- core.zone.node[wmcn][[1]]
     
     parm.path <- paste0(parm.path.2,".",microclimate.node$Name)
@@ -305,6 +321,9 @@ inspect_apsimx <- function(file = "", src.dir = ".",
   if(node == "Crop"){
     ## Which is 'Crop'
     wmmn <- grepl("Models.Manager", core.zone.node)
+    if(all(wmmn == FALSE)){
+      stop("Crop not found")
+    }
     manager.node <- core.zone.node[wmmn]
     
     #cat("Manager Name:",names(manager.node[[1]]),"\n")
@@ -329,6 +348,9 @@ inspect_apsimx <- function(file = "", src.dir = ".",
   
   if(node == "Manager"){
     wmmn <- grepl("Models.Manager", core.zone.node)
+    if(all(wmmn == FALSE)){
+      stop("Manager not found")
+    }
     manager.node <- core.zone.node[wmmn]
     parm.path <- parm.path.2
     ## Print available Manager components
@@ -340,7 +362,7 @@ inspect_apsimx <- function(file = "", src.dir = ".",
       position <- parm[[2]]
       find.manager <- grep(parm1, manager.node.names, ignore.case = TRUE)
       selected.manager.node <- manager.node.names[find.manager]
-      parm.path <- paste0(parm.path.2,".",selected.manager.node)
+      parm.path <- paste0(parm.path.2, ".", selected.manager.node)
       
       if(is.na(position)){
         ms.params <- manager.node[[find.manager]]$Parameters
@@ -380,6 +402,64 @@ inspect_apsimx <- function(file = "", src.dir = ".",
         print(knitr::kable(as.data.frame(mat), digits = digits))
         cat("\n")
       }
+    }
+  }
+  
+  if(node == "Report"){
+    wrn <- grepl("Models.Report", core.zone.node)
+    if(all(wrn == FALSE)){
+      stop("Report not found")
+    }
+    report.node <- core.zone.node[wrn]
+    parm.path <- parm.path.2
+    ## Print available Manager components
+    report.node.names <- sapply(report.node, FUN = function(x) x$Name)
+
+    tmp <- vector("list", length = length(report.node.names))
+    for(i in 1:length(report.node)){
+      ## Variable Names
+      vn <- as.data.frame(unlist(report.node[[i]]$VariableNames))
+      names(vn) <- "VariableNames"
+      en <- as.data.frame(unlist(report.node[[i]]$EventNames))
+      names(en) <- "EventNames"
+      tmp[[i]] <- list(vn = vn, en = en)
+    }
+    
+    if(missing(parm)){
+      for(i in 1:length(tmp)){
+        cat("Report name:", report.node[[i]]$Name, "\n")
+        print(knitr::kable(tmp[[i]]$vn))
+        print(knitr::kable(tmp[[i]]$en))   
+        cat("\n")
+      }
+      parm.path <- paste0(parm.path.2,".", report.node.names)
+    }else{
+        if(!is.list(parm)){
+          if(length(report.node.names) > 1)
+            stop("More than one Report is present. Use a list to choose one.")
+          if(!grepl(parm, "VariableNames") && !grepl(parm, "EventNames"))
+            stop("parm should contain either VariableNames or EventNames")
+          if(parm == "VariableNames") print(knitr::kable(tmp[[i]]$vn))
+          if(parm == "EventNames") print(knitr::kable(tmp[[i]]$en))
+          parm.path <- paste0(parm.path.2,".", report.node.names)
+       }else{
+          if(!any(grepl(parm[[1]], report.node.names)))
+            stop("the first element of parm should match a report name")
+          wr2p <- grep(parm[[1]], report.node.names)
+          if(is.na(parm[[2]])){
+            print(knitr::kable(tmp[[wr2p]]$vn))
+            print(knitr::kable(tmp[[wr2p]]$en))
+            parm.path <- paste0(parm.path.2,".", report.node.names[wr2p])
+            position <- NA
+          }else{
+            if(grepl(parm[[2]],"VariableNames")) print(knitr::kable(tmp[[wr2p]]$vn))
+            if(grepl(parm[[2]], "EventNames")) print(knitr::kable(tmp[[wr2p]]$en)) 
+            parm.path <- paste0(parm.path.2,".", report.node.names[wr2p])
+            parm1 <- grep(parm[[1]], report.node.names, value = TRUE)
+            parm2 <- grep(parm[[2]], c("VariableNames", "EventNames"), value = TRUE)
+            position <- wr2p
+          }
+       }
     }
   }
   
@@ -435,7 +515,301 @@ inspect_apsimx <- function(file = "", src.dir = ".",
   invisible(parm.path)
 }
 
+#' 
+#'  This function is a work in progress. There are many instances for which it will not work.
+#'  
+#'  It will probably only find the first instance that matches.
+#'  
+#'  A future feature will be to search for a jspath instead of simply a regular expression
+#'  
+#' @title Inspect an .apsimx or .json (JSON) file
+#' @name inspect_apsimx_json
+#' @description inspect an .apsimx or .json (JSON) file. It does not replace the GUI, but it can save time by quickly checking parameters and values.
+#' @param file file ending in .apsimx or .json to be inspected (JSON)
+#' @param src.dir directory containing the .apsimx or .json file to be inspected; defaults to the current working directory
+#' @param parm string or regular expression for partial matching.
+#' @param search.depth default is 15. How deep should the algorithm explore the structure of the list.
+#' @param print.path whether to print the parameter path (default is FALSE)
+#' @param verbose whether to print additional information (mostly used for debugging)
+#' @return prints a table with inspected parameters and values (and the path when \sQuote{print.path} = TRUE).
+#' @export
+#' @examples 
+#' \donttest{
+#' 
+#' ex.dir <- auto_detect_apsimx_examples()
+#' ## It seems to work for simple search
+#' inspect_apsimx_json("Wheat.apsimx", src.dir = ex.dir, parm = "Version")
+#' inspect_apsimx_json("Wheat.apsimx", src.dir = ex.dir, parm = "Simulations")
+#' inspect_apsimx_json("Wheat.apsimx", src.dir = ex.dir, parm = "Clock")
+#' inspect_apsimx_json("Wheat.apsimx", src.dir = ex.dir, parm = "Weather")
+#' ## Does return soil components
+#' inspect_apsimx_json("Wheat.apsimx", src.dir = ex.dir, parm = "DUL")
+#' ## Or cultivar
+#' inspect_apsimx_json("Wheat.apsimx", src.dir = ex.dir, parm = "Hartog")
+#' 
+#' }
+
+inspect_apsimx_json <- function(file = "", src.dir = ".", parm,
+                                search.depth = 15,
+                                print.path = FALSE,
+                                verbose = FALSE){
+  
+  .check_apsim_name(file)
+  .check_apsim_name(src.dir)
+  
+  if(missing(parm))
+    stop("You need to specify the parm argument")
+  
+  file.names.apsimx <- dir(path = src.dir, pattern = ".apsimx$", ignore.case = TRUE)
+  file.names.json <- dir(path = src.dir, pattern = ".json$", ignore.case = TRUE)
+  
+  if(length(file.names.apsimx) == 0 && length(file.names.json) == 0){
+    stop("There are no .json or .apsimx files in the specified directory to inspect.")
+  }
+  
+  apsimx_json <- jsonlite::read_json(file.path(src.dir, file)) ### This is a list
+  
+  jsonpath <- "$"
+  
+  x <- apsimx_json
+  
+  ## This handles parameters at the first level
+  if(any(grepl(parm, names(x)))){
+    wpi <- grep(parm, names(x))
+    jsonpath <- paste0(jsonpath, ".", names(x)[wpi])
+    print(knitr::kable(as.data.frame(x[wpi])))
+    if(print.path) print(jsonpath)
+    if(verbose) cat("Level: 0 \n")
+    return(invisible(jsonpath))
+  }
+
+  jsonpath <- paste0(jsonpath, ".", x$Name)
+  
+  for(i in 1:search.depth){
+    
+    ## First try to see if parameter is in names
+    nms <- names(x)
+    
+    if(!is.null(nms) && any(grepl(parm, nms))){
+      wpi <- grep(parm, nms)
+      jsonpath <- paste0(jsonpath, ".", names(x)[wpi])
+      xd0 <- x[wpi]
+      xd1 <- jsonlist2dataframe(xd0)
+      
+      print(knitr::kable(xd1))
+      if(print.path) print(jsonpath)
+      if(verbose) cat("Level: 1 \n")
+      return(invisible(jsonpath))
+    }
+
+    ## It is possible for parm to be in Name
+    if(!is.atomic(x)) nm <- x$Name
+      
+    if(!is.null(nm)){
+      if(grepl(parm, nm)){
+        wpn <- grep(parm, nm)  
+        jsonpath <- paste0(jsonpath, ".", nm)
+        xd0 <- x[wpn]
+        xd1 <- jsonlist2dataframe(xd0)
+        names(xd1) <- nm
+        print(knitr::kable(xd1))
+        if(print.path) print(jsonpath)
+        return(invisible(jsonpath))
+      }        
+    }
+
+    if(any(grepl(parm, x))){
+      
+      wgpx <- grep(parm, x)
+      
+      nms <- try(sapply(x[[wgpx]], function(x) x$Name), silent = TRUE)
+      
+      if(verbose){
+        print(i)
+        print(wgpx)
+        print(jsonpath)
+        print(nms)
+      }
+      
+      if(inherits(nms, "try-error")) nms <- NULL
+      
+      if(any(sapply(nms, is.null))) nms <- NULL
+      
+      if(!is.null(nms)){
+        if(any(grepl(parm, nms))){
+          wpn <- grep(parm, nms)  
+          jsonpath <- paste0(jsonpath, ".", nms[wpn])
+          xd0 <- x[[wgpx]][wpn]
+          xd1 <- jsonlist2dataframe(xd0)
+          print(knitr::kable(xd1))
+          if(print.path) print(jsonpath)
+          return(invisible(jsonpath))
+        }        
+      }
+      
+      wgpx2 <- grep(parm, x[[wgpx]])
+      
+      if(!is.null(nms)){
+        
+        if(!is.null(nms[wgpx2]))
+          jsonpath <- paste0(jsonpath, ".", nms[wgpx2])
+
+        if(wgpx2 <= length(x[[wgpx]])){
+          x <- x[[wgpx]][[wgpx2]]
+        }else{
+          if(verbose){
+            cat("x length:", length(x), "\n")
+            cat("wgpx2", wgpx2, "\n")
+            cat("length x[[wgpx]]", length(x[[wgpx]]), "\n")
+          }
+        }
+        
+      }else{
+
+        gjl <- grep_json_list(parm, x)
+        gjlm <- strsplit(gjl$positions, ".", fixed = TRUE)[[1]]
+        gjlms <- as.numeric(gjlm[2:(length(gjlm) - 1)])
+
+        for(i in gjlms) x <- x[[i]]
+        
+        ## Need to bring back the code I wrote before to extract the right stuff
+        if(!is.null(x$Key))
+          jsonpath <- paste0(jsonpath, ".", x$Key)
+          
+        print(knitr::kable(as.data.frame(x)))
+        if(print.path) print(jsonpath)
+        return(invisible(jsonpath))
+      }
+    }
+  }
+  
+  if(i == search.depth) stop("Parameter not found")
+
+  invisible(jsonpath)
+}
+
+## Convert a json list to a data.frame
+## This needs to handle a variety of cases
+## 1. Simple approach (unlist and data.frame return no error)
+##    In this case all the list elements have equal length
+## 2. 
+jsonlist2dataframe <- function(x){
+  
+  nms0 <- names(x)
+  if(is.list(x) && length(x) == 1) x <- x[[1]]
+  
+  if(length(unique(sapply(x, length))) == 1){
+    dt0 <- try(as.data.frame(unlist(x)), silent = TRUE)
+    if(!inherits(dt0, "try-error")){
+      if(!is.null(nms0)) names(dt0) <- nms0
+      return(dt0)    
+    }else{
+      print(str_list(x))
+      stop("Can't convert list to data.frame")
+    } 
+  }
+
+  ## The problem is that some elements might be null
+  winn <- !sapply(x, function(x) is.null(x)) ## which is not null
+  x0 <- x[winn]
+  tmp <- NULL
+  for(i in seq_along(x0)){
+    nms.x0 <- names(x0)[i]
+    if(!names(x0)[i] %in% c("Children", "Code", "Parameters")){
+      tmp <- rbind(tmp, as.data.frame(unlist(x0[i])))
+    }
+    
+    if(names(x0)[i] == "Children"){
+      lchildren <- length(x0$Children)
+      tmp <- rbind(tmp, paste0("List of length: ", lchildren))
+      rnms <- row.names(tmp)
+      rnms[i] <- "Children"
+      row.names(tmp) <- rnms
+    }
+    
+    if(names(x0)[i] == "Code"){
+      tmp <- rbind(tmp, paste0("C# code..."))
+      rnms <- row.names(tmp)
+      rnms[i] <- "C# code"
+      row.names(tmp) <- rnms
+    }
+    
+    if(names(x0)[i] == "Parameters"){
+      tmp <- rbind(tmp, paste0("Parameters..."))
+      rnms <- row.names(tmp)
+      rnms[i] <- "Parameters"
+      row.names(tmp) <- rnms
+    }
+  }
+  
+  if(!is.null(x0$Name)){
+    names(tmp) <- x$Name
+  }else{
+    if(!is.null(names(x)[winn])) names(tmp) <- names(x)[winn]
+  } 
+  tmp
+}
 
 
+## The idea of this function is that it will return the position where the 
+## pattern is found and also the node
+## The trick is that the previous function does not quite give me what I want
+#' @title grep but for json list
+#' @name grep_json_list
+#' @description recursive grep adapted for a json list
+#' @param pattern as in grep
+#' @param x object (a list)
+#' @param ignore.case as in grep
+#' @param search.depth search depth for the list (to prevent endless search)
+#' @export
+grep_json_list <- function(pattern, x, ignore.case = FALSE, search.depth = 10){
+  
+  ## Check first
+  rar <- rapply(x, function(x) grep(pattern, x, ignore.case = ignore.case))
+  
+  if(length(rar) == 0L)
+    stop("pattern not found")
+  
+  positions <- ""
+  jsonpath <- ""
+  
+  for(i in 1:search.depth){
+    
+    if(is.list(x) && length(x) == 1) x <- x[[1]]
+    wgnp <- grep(pattern, x, ignore.case = ignore.case)
+    
+    if(length(wgnp) < 0.5) break
+    
+    if(!is.atomic(x) && !is.null(x$Name))
+      jsonpath <- paste0(jsonpath, ".", x$Name)
+    
+    if(!is.atomic(x) && length(wgnp) > 0)
+      positions <- paste0(positions, ".", wgnp)
+    
+    if(length(wgnp) == 1){
+      x <- x[[wgnp]]  
+    }else{
+      xn <- list()
+      for(i in seq_along(wgnp)){
+        xn[[i]] <- x[[i]]
+      }
+      x <- xn
+    }
+  }
+  
+  return(list(x = x, jsonpath = jsonpath, positions = positions))
+}
 
-
+## This version of grep is not expose at the moment
+grep_json_list1 <- function(pattern, x, ...){
+  
+  tmp <- rapply(x, function(x,...) grep(pattern = pattern, x = x, value = TRUE, ...), ...)
+  
+  ans <- vector("list", length = length(tmp))
+  
+  for(i in seq_along(tmp)){
+    ans[[i]] <- tmp[[i]]
+  }
+  
+  return(ans)
+}

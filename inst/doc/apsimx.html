@@ -12,7 +12,7 @@
 
 <meta name="author" content="Fernando Miguez" />
 
-<meta name="date" content="2021-06-30" />
+<meta name="date" content="2021-07-09" />
 
 <title>apsimx: An R package for APSIM Next Generation (and Classic)</title>
 
@@ -318,7 +318,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">apsimx: An R package for APSIM Next Generation (and Classic)</h1>
 <h4 class="author">Fernando Miguez</h4>
-<h4 class="date">2021-06-30</h4>
+<h4 class="date">2021-07-09</h4>
 
 
 <div id="TOC">
@@ -452,7 +452,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 </div>
 <div id="inspecting-a-file-with-inspect_apsimx-why" class="section level2">
 <h2>Inspecting a file with ‘inspect_apsimx’: Why?</h2>
-<p>Being able to inspect a file from within R is a functionality which was not considered in previous R packages. My first motivation for doing this was to be able to verify from within R that if I edited an APSIM(X) file, the editing worked as expected. The second use of ‘inspect’ is to be able to understand the structure of ‘apsim’ files better. A third useful aspect of ‘inspect’ is that it can be used to supply the path for a parameter that will be later edited. In addition, having this functionality within R allows to make these tasks repeatable. For complex inspections and manipulations of an .apsim(x) file the GUI is recommended. However, this package is designed to work with relatively simple .apsim(x) files.</p>
+<p>Being able to inspect a file from within R is a functionality which was not considered in previous R packages. My first motivation for doing this was to be able to verify from within R that if I edited an APSIM(X) file, the editing worked as expected. The second use of ‘inspect’ is to be able to understand the structure of ‘apsim’ files better. A third useful aspect of ‘inspect’ is that it can be used to supply the path for a parameter that will be later edited. Another benefit of the inpspect functions is that if you are running APSIM in a cluster, you do not have access to the GUI, so these functions allow you to inspect your files in that environment. In addition, having this functionality within R allows to make these tasks repeatable. For complex inspections and manipulations of an .apsim(x) file the GUI is recommended. However, this package is designed to work with relatively simple .apsim(x) files.</p>
 </div>
 <div id="inspecting-and-editing-the-maize-example" class="section level2">
 <h2>Inspecting and Editing the ‘Maize’ example</h2>
@@ -522,6 +522,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 ## |90-120  |300       |1.1    |12          |0.01  |1      |60.3219808311247 |
 ## |120-150 |300       |1      |12          |0.01  |1      |36.5871308286749 |
 ## |150-180 |300       |0.9    |12          |0.01  |1      |22.1912165985086 |</code></pre>
+<p>There is another function that might be useful <strong>inspect_apsimx_json</strong> which can be more flexible and a variation of grep <strong>grep_json_list</strong>.</p>
 </div>
 </div>
 <div id="proposed-workflow" class="section level1">
@@ -725,7 +726,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <pre><code>## Edited /folder/simulation/area/folder/manager[1]/ui/density 
 ## Edited parameter 
 ## New values  8 
-## Created  /var/folders/6j/xksd1tld70q91h73d5s0ln7c0000gn/T//RtmpPfGX2P/Millet-pp.apsim</code></pre>
+## Created  /var/folders/6j/xksd1tld70q91h73d5s0ln7c0000gn/T//RtmpwiHdJQ/Millet-pp.apsim</code></pre>
 <p>Verify that it was edited correctly.</p>
 <div class="sourceCode" id="cb39"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb39-1" data-line-number="1"><span class="kw">inspect_apsim</span>(<span class="st">&quot;Millet-pp.apsim&quot;</span>, <span class="dt">src.dir =</span> tmp.dir,</a>
 <a class="sourceLine" id="cb39-2" data-line-number="2">              <span class="dt">node =</span> <span class="st">&quot;Manager&quot;</span>,</a>
@@ -969,7 +970,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 ## Edit (level):  6 
 ## Edited parameter:  Y 
 ## New values:  0 12 20 28 0 
-## Created:  /var/folders/6j/xksd1tld70q91h73d5s0ln7c0000gn/T//RtmpPfGX2P/MaizeSoybean-edited.apsimx</code></pre>
+## Created:  /var/folders/6j/xksd1tld70q91h73d5s0ln7c0000gn/T//RtmpwiHdJQ/MaizeSoybean-edited.apsimx</code></pre>
 <p>Let’s inspect the edited file</p>
 <div class="sourceCode" id="cb60"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb60-1" data-line-number="1"><span class="kw">inspect_apsimx_replacement</span>(<span class="st">&quot;MaizeSoybean-edited.apsimx&quot;</span>, </a>
 <a class="sourceLine" id="cb60-2" data-line-number="2">                           <span class="dt">src.dir =</span> tmp.dir,</a>
@@ -1069,7 +1070,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 ## Edited (child):  none 
 ## Edited parameters:  
 ## New values:  Ames.met 
-## Created:  /var/folders/6j/xksd1tld70q91h73d5s0ln7c0000gn/T//RtmpPfGX2P/Factorial-edited.apsimx</code></pre>
+## Created:  /var/folders/6j/xksd1tld70q91h73d5s0ln7c0000gn/T//RtmpwiHdJQ/Factorial-edited.apsimx</code></pre>
 <p>I won’t be running the ‘Factorial’ example here, but if you are interested this is done in the folder ‘tests’ in the pacakge source.</p>
 </div>
 </div>
@@ -1077,7 +1078,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <h1>APSIM Inputs: Weather and Soil</h1>
 <div id="obtaining-weather-data" class="section level2">
 <h2>Obtaining weather data</h2>
-<p>One of the easiest ways of generating weather data (“.met” files) is by using the ‘GSODR’ (<a href="https://github.com/ropensci/GSODR" class="uri">https://github.com/ropensci/GSODR</a>), ‘FedData’ (<a href="https://github.com/ropensci/FedData" class="uri">https://github.com/ropensci/FedData</a>) or ‘nasapower’ (<a href="https://github.com/ropensci/nasapower" class="uri">https://github.com/ropensci/nasapower</a>) packages. It is also possible to obtain data from the Iowa Environmental Mesonet (<a href="https://mesonet.agron.iastate.edu/" class="uri">https://mesonet.agron.iastate.edu/</a>). In addition, this package provides the following utilities:</p>
+<p>One of the easiest ways of generating weather data (“.met” files) is by using the ‘nasapower’ (<a href="https://github.com/ropensci/nasapower" class="uri">https://github.com/ropensci/nasapower</a>) or ‘GSODR’ (<a href="https://github.com/ropensci/GSODR" class="uri">https://github.com/ropensci/GSODR</a>) packages. For the US, some options are ‘daymetr’ (<a href="https://github.com/bluegreen-labs/daymetr" class="uri">https://github.com/bluegreen-labs/daymetr</a>) or through the Iowa Environmental Mesonet (<a href="https://mesonet.agron.iastate.edu/" class="uri">https://mesonet.agron.iastate.edu/</a>). In addition, this package provides the following utilities:</p>
 <ul>
 <li><strong>read_apsim_met</strong>: read an APSIM met file into R with S3 class ‘met’.</li>
 <li><strong>write_apsim_met</strong>: write an APSIM met file from an object of class ‘met’.</li>
@@ -1086,7 +1087,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <li><strong>napad_apsim_met</strong>: Fill in date gaps with NAs in a ‘met’ object. Useful for imputation.</li>
 <li><strong>compare_apsim_met</strong>: utility for quick comparison of ‘met’ objects. There is also a plot method.</li>
 <li><strong>get_power_apsim_met</strong>: (requires the ‘nasapower’ package). Fetch data and create a ‘met’ R object and (optionally) write a met file to disk.</li>
-<li><strong>get_daymet_apsim_met</strong>: (requires the ‘FedData’ package). Fetch data and create a ‘met’ R object and (optionally) write a met file to disk.</li>
+<li><strong>get_daymet2_apsim_met</strong>: (requires the ‘daymetr’ package). Fetch data and create a ‘met’ R object and (optionally) write a met file to disk.</li>
 <li><strong>get_gsod_apsim_met</strong>: (requires the ‘GSODR’ package). Fetch data and create a ‘met’ R object and (optionally) write a met file to disk.</li>
 <li><strong>get_iem_apsim_met</strong>: Fetch data from Iowa Environmental Mesonet</li>
 <li><strong>get_iemre_apsim_met</strong>: Fetch data from Iowa Environmental Mesonet Reanalysis</li>
@@ -1096,7 +1097,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <div id="obtaining-soil-data" class="section level2">
 <h2>Obtaining soil data</h2>
 <p>The function <strong>get_isric_soil_profile</strong> will retrieve data from the ISRIC Soil Grid global dataset (<a href="https://www.isric.org/" class="uri">https://www.isric.org/</a>) and return an object of class <em>soil_profile</em> (see also <em>apsimx_soil_profile</em>). To derive some of the properties needed by APSIM pedotransfer functions from Saxton and Rawls (2006) were used. This is a work in progress and improvements and suggestions are welcome.</p>
-<p>In the USA, the function <strong>get_ssurgo_soil_profile</strong> will retrieve data from the SSURGO database through the <strong>soilDB</strong> R pacakge and will always return a list with objects of class <em>soil_profile</em>. Internally, it uses the <strong>ssurgo2sp</strong> function, which can be used to create an APSIM soil profile in two steps. The first step would be to obtain soil data through the ‘FedData’ R package (<a href="https://github.com/ropensci/FedData" class="uri">https://github.com/ropensci/FedData</a>) by using the function <strong>get_ssurgo</strong>. The function <strong>ssurgo2sp</strong> can be used for conversion from <strong>SSURGO</strong> csv files to an object of class <strong>soil_profile</strong> and <strong>apsimx_soil_profile</strong> for generating a soil profile that can be used in APSIM-X. Finally, the function <strong>edit_apsimx_replace_soil_profile</strong> will batch replace the soil profile created by <strong>apsimx_soil_profile</strong> in a designated ‘.apsimx’ file. Similarly, ‘edit_apsim_replace_soil_profile’ will batch replace the soil profile in a designated ‘.apsim’ (Classic) file. I will be working on a more concrete tutorial at some point.</p>
+<p>In the USA, the function <strong>get_ssurgo_soil_profile</strong> will retrieve data from the SSURGO database through the <strong>soilDB</strong> R pacakge and will always return a list with objects of class <em>soil_profile</em>. Internally, it uses the <strong>ssurgo2sp</strong> function, which can be used to create an APSIM soil profile in two steps. The first step would be to obtain soil data through the ‘FedData’ R package by using the function <strong>get_ssurgo</strong> or use the <strong>get_ssurgo_tables</strong> in apsimx. The function <strong>ssurgo2sp</strong> can be used for conversion from <strong>SSURGO</strong> csv files to an object of class <strong>soil_profile</strong> and <strong>apsimx_soil_profile</strong> for generating a soil profile that can be used in APSIM-X. Finally, the function <strong>edit_apsimx_replace_soil_profile</strong> will batch replace the soil profile created by <strong>apsimx_soil_profile</strong> in a designated ‘.apsimx’ file. Similarly, ‘edit_apsim_replace_soil_profile’ will batch replace the soil profile in a designated ‘.apsim’ (Classic) file. I will be working on a more concrete tutorial at some point.</p>
 </div>
 </div>
 <div id="file-type-or-file-format-details" class="section level1">
@@ -1112,6 +1113,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <p><strong>edit_apsimx_batch</strong>: Uses APSIM-X built-in functionality to edit parameters. In testing, it is slower than the other ’edit_apsimx*’ functions.</p>
 <p><strong>doy2date</strong>: Utility function for converting from day of the year (1-366) to ‘Date’ and performing the inverse conversion.</p>
 <p><strong>compare_apsim</strong>: Utility function for comparing simulations or observed and simulated data.</p>
+<p><strong>unit_conv</strong>: Unit conversion utility</p>
 </div>
 <div id="to-do" class="section level1">
 <h1>To-Do</h1>

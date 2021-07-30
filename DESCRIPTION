@@ -1,7 +1,7 @@
 Package: apsimx
 Title: Inspect, Read, Edit and Run 'APSIM' "Next Generation" and
         'APSIM' Classic
-Version: 1.995
+Version: 1.998
 Authors@R: person("Fernando", "Miguez", email = "femiguez@iastate.edu", role = c("aut", "cre"), comment = c(ORCID = "0000-0002-4627-8329"))
 Description: The functions in this package inspect, read, edit and run files for 'APSIM' "Next Generation" ('JSON')
              and 'APSIM' "Classic" ('XML'). The files with an 'apsim' extension correspond to
@@ -20,8 +20,8 @@ Suggests: BayesianTools, datasets, daymetr, FedData, ggplot2, GSODR,
 LazyData: true
 RoxygenNote: 7.1.1
 NeedsCompilation: no
-Packaged: 2021-07-09 21:25:14 UTC; fernandomiguez
+Packaged: 2021-07-29 19:45:55 UTC; fernandomiguez
 Author: Fernando Miguez [aut, cre] (<https://orcid.org/0000-0002-4627-8329>)
 Maintainer: Fernando Miguez <femiguez@iastate.edu>
 Repository: CRAN
-Date/Publication: 2021-07-10 16:30:11 UTC
+Date/Publication: 2021-07-30 15:00:06 UTC

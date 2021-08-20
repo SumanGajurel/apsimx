@@ -25,7 +25,7 @@ returns a list with tables for mapunit, component, chorizon and mapunit.shp (obj
 Data source is USDA-NRCS Soil Data Access. See package soilDB for more details
 }
 \examples{
-\donttest{
+\dontrun{
 require(soilDB)
 require(sp)
 require(sf)

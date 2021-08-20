@@ -11,7 +11,7 @@
 #' @return a list with elements: mapunit, component, chorizon and mapunit.shp
 #' @export
 #' @examples 
-#' \donttest{
+#' \dontrun{
 #' require(soilDB)
 #' require(sp)
 #' require(sf)

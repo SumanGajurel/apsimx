@@ -166,7 +166,10 @@ write_apsim_met <- function(met, wrt.dir = NULL, filename = NULL){
   ## Write site if it exists
   if(!is.na(attr(met,"site")) && length(attr(met,"site")) > 0){
     writeLines(attr(met,"site"), con = con)
-  } 
+  }
+  if(is.na(attr(met,"latitude")) || length(attr(met,"latitude")) == 0){
+    stop("latitude should be present", call. = FALSE)
+  }
   writeLines(attr(met,"latitude"), con = con)
   if(!is.na(attr(met,"longitude")) && length(attr(met,"longitude")) > 0){
     writeLines(attr(met,"longitude"), con = con)
@@ -312,6 +315,10 @@ impute_apsim_met <- function(met, method = c("approx","spline","mean"), verbose 
 check_apsim_met <- function(met){
   
   if(!inherits(met, "met")) stop("object should be of class 'met'")
+  
+  if(nrow(met) == 0){
+    stop("No rows of data present in this object.")
+  }
   
   col.names <- c("year","day","radn","mint","maxt","rain")
   ## check for column names

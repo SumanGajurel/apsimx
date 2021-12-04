@@ -64,7 +64,7 @@ get_ssurgo_soil_profile <- function(lonlat, shift = -1,
   lat <- lonlat[2]
   
   ## Determine if the location is in the US
-  if(requireNamespace("maps")){
+  if(requireNamespace("maps", quietly = TRUE)){
     country <- maps::map.where(x = lon, y = lat)
     if(country != "USA" || is.na(country))
       stop("These coordinates do not correspond to a location in the USA. \n Did you specify the coordinates correctly?")
@@ -88,9 +88,9 @@ get_ssurgo_soil_profile <- function(lonlat, shift = -1,
   }
   
   if(verbose == FALSE){
-    res <- suppressWarnings(soilDB::SDA_spatialQuery(spg, what = 'mukey'))
+    res <- suppressWarnings(soilDB::SDA_spatialQuery(spg, what = 'geom', geomIntersection = TRUE))
   }else{
-    res <- soilDB::SDA_spatialQuery(spg, what = 'mukey')  
+    res <- soilDB::SDA_spatialQuery(spg, what = 'geom', geomIntersection = TRUE)  
   }
   
   mu.is <- soilDB::format_SQL_in_statement(res$mukey)
@@ -115,7 +115,7 @@ get_ssurgo_soil_profile <- function(lonlat, shift = -1,
   
   ## Retrieve the state from the areasymbol
   if(shift <= 0 || length(unique(mapunit$areasymbol)) == 1){
-    cmpnt$state <- strtrim(mapunit$areasymbol, 2)
+    cmpnt$state <- unique(strtrim(mapunit$areasymbol, 2))
   }else{
     cmpnt$state <- NA
     warning("This area includes more than one state. 
@@ -139,7 +139,7 @@ get_ssurgo_soil_profile <- function(lonlat, shift = -1,
     spg.sf[["AREASYMBOL"]] <- mapunit$areasymbol
     mapunit.shp <- spg.sf
   }else{
-    mapunit.shp <- sf::st_as_sf(spg)
+    mapunit.shp <- sf::st_as_sf(res)
   }
   
   sp0 <- ssurgo2sp(mapunit = mapunit, component = cmpnt,
@@ -165,10 +165,13 @@ get_ssurgo_soil_profile <- function(lonlat, shift = -1,
                                KS = sp0[[i]]$KS,
                                Carbon = sp0[[i]]$Carbon,
                                crop.LL = sp0[[i]]$LL15,
+                               ParticleSizeClay = sp0[[i]]$ParticleSizeClay,
+                               ParticleSizeSilt = sp0[[i]]$ParticleSizeSilt,
+                               ParticleSizeSand = sp0[[i]]$ParticleSizeSand,
                                soil.bottom = soil.bottom,
                                metadata = metadata)
     
-    check_apsimx_soil_profile(asp)
+    ## check_apsimx_soil_profile(asp)
     
     ans[[i]] <- asp
   }

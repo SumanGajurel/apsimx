@@ -12,7 +12,10 @@ xargs_apsimx(
   list.referenced.filenames = FALSE,
   single.threaded = FALSE,
   cpu.count = -1L,
-  simulation.names = FALSE
+  simulation.names = FALSE,
+  dotnet = FALSE,
+  mono = FALSE,
+  exe.path = NA
 )
 }
 \arguments{
@@ -31,6 +34,15 @@ xargs_apsimx(
 \item{cpu.count}{(Default: -1) Maximum number of threads/processes to spawn for running simulations.}
 
 \item{simulation.names}{Only run simulations if their names match this regular expression.}
+
+\item{dotnet}{Logical. There is a global option for this argument, but this will override it. This 
+can be useful if the goal is to compare an old version of Next Gen (before Sept 2021) with a more
+recent version in the same script. This might be needed if you have your own compiled version of APSIM Next Gen.}
+
+\item{mono}{Logical. Should be set to TRUE if running a version of APSIM Next Gen from Aug 2021 or older on Mac or Linux.}
+
+\item{exe.path}{executable path. This can be useful for having both a global option through \sQuote{apsimx.options} and
+a local option that will override that. This option will take precedence.}
 }
 \value{
 it returns a character vector with the extra arguments.

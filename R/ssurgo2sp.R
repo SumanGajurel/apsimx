@@ -1,4 +1,8 @@
 #' 
+#'  Some of the conversions use pedotrasnfer equations from Saxton and Rawls.
+#'  Soil Water Characteristic Estimates by Texture and Organic Matter for Hydrologic Solutions.
+#'  Soil Sci. Soc. Am. J. 70:1569–1578 (2006). 
+#' 
 #' @title Take in \acronym{SSURGO} csv files and create a soil profile
 #' @name ssurgo2sp
 #' @description Utility function to convert \acronym{SSURGO} data to soil profile
@@ -81,7 +85,7 @@
 #' 
 #' ## Convert to an APSIM soil profile
 #' asp2.c <- apsimx_soil_profile(nlayers = 10,
-#'                               Thickness = sp2.c[[1]]$Thickness,
+#'                               Thickness = sp2.c[[1]]$Thickness * 10,
 #'                               BD = sp2.c[[1]]$BD,
 #'                               AirDry = sp2.c[[1]]$AirDry,
 #'                               LL15 = sp2.c[[1]]$LL15,
@@ -90,6 +94,9 @@
 #'                               KS = sp2.c[[1]]$KS,
 #'                               Carbon = sp2.c[[1]]$Carbon,
 #'                               PH = sp2.c[[1]]$PH,
+#'                               ParticleSizeClay = sp2.c[[1]]$ParticleSizeClay,
+#'                               ParticleSizeSilt = sp2.c[[1]]$ParticleSizeSilt,
+#'                               ParticleSizeSand = sp2.c[[1]]$ParticleSizeSand,
 #'                               metadata = metadata)
 #'                               
 #' plot(asp2.c)
@@ -204,7 +211,7 @@ ssurgo2sp <- function(mapunit = NULL, component = NULL,
   chorizon3$PH <- chorizon3$ph1to1h2o.r
   
   ## From Saxton and Rawls
-  chorizon3$BD <- (1 - chorizon3$SAT) * ifelse(is.na(chorizon3$partdensity),2.65,chorizon3$partdensity)
+  chorizon3$BD <- (1 - chorizon3$SAT) * ifelse(is.na(chorizon3$partdensity), 2.65, chorizon3$partdensity)
   
   ## Convert to fraction
   chorizon3$AirDry <- chorizon3$LL15 * ifelse(chorizon3$hzdept.r == 0, 0.5, 1)
@@ -212,18 +219,26 @@ ssurgo2sp <- function(mapunit = NULL, component = NULL,
   ## Soil Carbon
   ## SOM contains approximately 58% C; therefore, a factor of
   ## 1.72 can be used to convert OC to SOM.
-  chorizon3$Carbon <- chorizon3$om.r * 0.58
+  chorizon3$Carbon <- chorizon3$om.r * (1/1.72)
+  
+  ### Adding texture
+  chorizon3$ParticleSizeClay <- chorizon3$claytotal.r
+  chorizon3$ParticleSizeSilt <- chorizon3$silttotal.r
+  chorizon3$ParticleSizeSand <- chorizon3$sandtotal.r
   
   ## Soil names
   soil.names <- component5$compname.mukey
   soil.list <- vector(mode = "list", length = length(soil.names))
   names(soil.list) <- soil.names
   
-  vars <- c("Depth", "Thickness", "BD", "AirDry", "LL15", "DUL", "SAT", "KS", "Carbon", "PH")
+  vars <- c("Depth", "Thickness", "BD", "AirDry", "LL15", "DUL", "SAT", "KS", 
+            "Carbon", "PH", "ParticleSizeClay", "ParticleSizeSilt", "ParticleSizeSand")
   
   for(sz in 1:length(soil.names)){
     
     one.soil <- chorizon3[chorizon3$cokey == component5$cokey[sz],]
+    
+    if(is.na(soil.bottom)) soil.bottom <- max(one.soil$hzdepb.r)
     
     if(nrow(one.soil) < 1){
       stop("There is no soil horizon for this component")

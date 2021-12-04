@@ -28,6 +28,9 @@ apsimx_soil_profile(
   NO3N = NULL,
   NH4N = NULL,
   PH = NULL,
+  ParticleSizeClay = NULL,
+  ParticleSizeSilt = NULL,
+  ParticleSizeSand = NULL,
   soil.bottom = 150,
   water.table = 200,
   soil.type = 0,
@@ -35,15 +38,15 @@ apsimx_soil_profile(
   metadata = NULL,
   soilwat = NA,
   swim = NA,
+  soilorganicmatter = NA,
   dist.parms = list(a = 0, b = 0.2)
 )
 
 \method{plot}{soil_profile}(
   x,
   ...,
-  property = c("all", "water", "BD", "AirDry", "LL15", "DUL", "SAT", "KS", "crop.XF",
-    "crop.KL", "crop.LL", "Carbon", "SoilCNRatio", "FOM", "FOM.CN", "FBiom", "FInert",
-    "NO3N", "NH4N", "PH")
+  property = c("all", "water", "BD", "AirDry", "LL15", "DUL", "SAT", "KS", "Carbon",
+    "SoilCNRatio", "FOM", "FOM.CN", "FBiom", "FInert", "NO3N", "NH4N", "PH")
 )
 
 check_apsimx_soil_profile(x)
@@ -91,6 +94,12 @@ check_apsimx_soil_profile(x)
 
 \item{PH}{soil pH}
 
+\item{ParticleSizeClay}{particle size clay (in percent)}
+
+\item{ParticleSizeSilt}{particle size silt (in percent)}
+
+\item{ParticleSizeSand}{particle size sand (in percent)}
+
 \item{soil.bottom}{bottom of the soil profile (cm)}
 
 \item{water.table}{water table level (not used at the moment) (cm)}
@@ -104,6 +113,8 @@ check_apsimx_soil_profile(x)
 \item{soilwat}{optional \sQuote{list} of class \sQuote{soilwat_parms}}
 
 \item{swim}{optional \sQuote{list} of class \sQuote{swim_parms}}
+
+\item{soilorganicmatter}{optional \sQuote{list} of class \sQuote{soilorganicmatter_parms}}
 
 \item{dist.parms}{parameter values for creating a profile. If a == 0 and b == 0 then \cr
 a constant value of 1 is used. If a == 0 and b != 0, then an exponential decay is used. \cr

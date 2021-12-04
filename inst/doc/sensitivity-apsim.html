@@ -12,7 +12,7 @@
 
 <meta name="author" content="Fernando Miguez" />
 
-<meta name="date" content="2021-08-19" />
+<meta name="date" content="2021-12-04" />
 
 <title>Sensitivity Analysis</title>
 
@@ -318,7 +318,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Sensitivity Analysis</h1>
 <h4 class="author">Fernando Miguez</h4>
-<h4 class="date">2021-08-19</h4>
+<h4 class="date">2021-12-04</h4>
 
 
 <div id="TOC">
@@ -465,15 +465,15 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <a class="sourceLine" id="cb7-3" data-line-number="3">                   <span class="dt">binf =</span> <span class="kw">c</span>(<span class="dv">0</span>, <span class="dv">5</span>), <span class="dt">bsup =</span> <span class="kw">c</span>(<span class="dv">200</span>, <span class="dv">300</span>))</a>
 <a class="sourceLine" id="cb7-4" data-line-number="4">X.mrrs<span class="op">$</span>X</a></code></pre></div>
 <pre><code>##       Fertiliser Population
-##  [1,]        100      152.5
-##  [2,]        100      300.0
-##  [3,]          0      300.0
+##  [1,]        100        5.0
+##  [2,]        200        5.0
+##  [3,]        200      152.5
 ##  [4,]          0      300.0
-##  [5,]        100      300.0
+##  [5,]          0      152.5
 ##  [6,]        100      152.5
-##  [7,]        200      152.5
-##  [8,]        100      152.5
-##  [9,]        100      300.0</code></pre>
+##  [7,]        100      152.5
+##  [8,]          0      152.5
+##  [9,]          0        5.0</code></pre>
 <p>The sensitivity package allows for decoupling the simulation runs and the analysis of the results. For example:</p>
 <div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb9-1" data-line-number="1"><span class="co">## This takes 2-3 minutes</span></a>
 <a class="sourceLine" id="cb9-2" data-line-number="2">sns2 &lt;-<span class="st"> </span><span class="kw">sens_apsimx</span>(<span class="st">&quot;Wheat.apsimx&quot;</span>, <span class="dt">src.dir =</span> tmp.dir,</a>

@@ -241,7 +241,12 @@ impute_apsim_met <- function(met, method = c("approx","spline","mean"), verbose 
   if(any(is.na(met[1,]))){
     wn1r <- which(is.na(met[1,]))
     for(i in seq_along(wn1r)){
-      met[1, wn1r[i]] <- mean(met[1:5, wn1r[i]], na.rm = TRUE)
+      if(all(is.na(met[1:15, wn1r[i]]))){
+        warning("The mean was used to impute the first row as the first 15 values were NAs")
+        met[1, wn1r[i]] <- mean(met[, wn1r[i]], na.rm = TRUE)
+      }else{
+        met[1, wn1r[i]] <- mean(met[1:15, wn1r[i]], na.rm = TRUE)  
+      }
       cat("Imputed first row for:", names(met)[wn1r[i]], "\n")
     }
     print(as.data.frame(met[1,]))
@@ -251,7 +256,12 @@ impute_apsim_met <- function(met, method = c("approx","spline","mean"), verbose 
   if(any(is.na(met[nrow(met),]))){
     wn1r <- which(is.na(met[nrow(met),]))
     for(i in seq_along(wn1r)){
-      met[nrow(met), wn1r[i]] <- mean(met[(nrow(met) - 5):nrow(met), wn1r[i]], na.rm = TRUE)
+      if(all(is.na(met[(nrow(met) - 15):nrow(met), wn1r[i]]))){
+        warning("The mean was used to impute the last row as the last 15 values were NAs")
+        met[nrow(met), wn1r[i]] <- mean(met[, wn1r[i]], na.rm = TRUE)
+      }else{
+        met[nrow(met), wn1r[i]] <- mean(met[(nrow(met) - 15):nrow(met), wn1r[i]], na.rm = TRUE)  
+      }
       cat("Imputed last row for:", names(met)[wn1r[i]], "\n")
     }
     print(as.data.frame(met[nrow(met),]))
@@ -320,7 +330,14 @@ check_apsim_met <- function(met){
     stop("No rows of data present in this object.")
   }
   
-  col.names <- c("year","day","radn","mint","maxt","rain")
+  col.names <- attr(met, "colnames")
+  
+  if(length(col.names) != ncol(met)){
+    cat("Names in data.frame:", names(met), "\n")
+    cat("Names in attribute column names", col.names, "\n")
+    cat("Different names", setdiff(names(met), col.names), "\n")
+    warning("Number of columns in data.frame do not match column names")
+  } 
   ## check for column names
   if(sum(names(met) %in% col.names) < 6) warning("column names might be wrong")
   ## Detect possible errors with years
@@ -357,6 +374,10 @@ check_apsim_met <- function(met){
   if(nrow(met) < length(dates)){
     warning(paste(length(dates) - nrow(met), "date discontinuities found. Consider using napad_apsim_met."))
   }
+  ## Check for last day of leap year
+  if(is_leap_year(met$year[nrow(met)]) && met$day[nrow(met)] == 365){
+    warning("Last year in the met file is a leap year and it only has 365 days")
+  }
   ## Detect possible errors with minimum temperature
   if(any(is.na(met[["mint"]]))){
     print(met[is.na(met$mint),])
@@ -383,6 +404,12 @@ check_apsim_met <- function(met){
     print(met[met$maxt > 60,])
     warning("Maximum temperature is greater than 60")
   }
+  ## Make sure that maxt is always higher or equal to mint
+  temp.diff <- met[["maxt"]] - met[["mint"]]
+  if(any(temp.diff < 0)){
+    print(met[which(temp.diff < 0),])
+    warning("Minimum temperature is greater than maximum temperature")
+  }
   ## Detect possible errors with radiation
   if(any(is.na(met[["radn"]]))){
     print(met[is.na(met$radn),])
@@ -405,6 +432,8 @@ check_apsim_met <- function(met){
     warning("Rain is negative")
   }
   if(any(max(met[["rain"]], na.rm = TRUE) > 100)){
+    ## Apparently it is more or less reasonable to question 100mm in 24 hours
+    ## https://journals.ametsoc.org/view/journals/hydr/20/12/jhm-d-19-0039_1.xml
     warning("Rain is possibly too high")
   }
   
@@ -431,27 +460,59 @@ napad_apsim_met <- function(met){
   
   ## First check if there are any discontinuities
   origin <- as.Date(paste0(met$year[1], "-01-01"))
-  first.day <- doy2date(met$day[1], year = met$year[1])
+  ## first.day <- doy2date(met$day[1], year = met$year[1])
   last.day <- doy2date(met$day[nrow(met)], year = met$year[nrow(met)])
-  dates <- seq(from = first.day, to = last.day, by = "day")
-  if(nrow(met) == length(dates)){
-    stop("No discontinuities found")
-  }  
+  dates <- seq(from = origin, to = last.day, by = "day")
   
-  ## Create a data.frame with continuous dates
-  namet <- data.frame(date = dates)
-  
-  ## Create date column for merging
-  met$date <- rep(as.Date(NA), length.out = nrow(met))
-  for(i in 1:nrow(met)){
-    met$date[i] <- doy2date(met$day[i], year = met$year[i])
+  if(nrow(met) == length(dates) && !is_leap_year(met$year[nrow(met)])){
+    stop("No discontinuities found", call. = FALSE)
   }
   
-  ans <- merge(namet, met, by = "date", all.x = TRUE)
-  ans$year <- as.numeric(format(ans$date, "%Y"))
-  ans$day <- as.numeric(format(ans$date, "%j"))
-  ans$date <- NULL
- 
+  fix1 <- FALSE
+  
+  if(nrow(met) != length(dates)){
+    ## Create a data.frame with continuous dates
+
+    namet <- data.frame(date = dates)
+    
+    ## Create date column for merging
+    met$date <- as.Date(paste0(met$year, "-", met$day), format = "%Y-%j")
+
+    ans <- merge(namet, met, by = "date", all.x = TRUE)
+    ans$year <- as.numeric(format(ans$date, "%Y"))
+    ans$day <- as.numeric(format(ans$date, "%j"))
+    ans$date <- NULL  
+    fix1 <- TRUE
+    ans <- as_apsim_met(ans, 
+                        filename = attr(met, "filename"),
+                        site = attr(met, "site"),
+                        latitude = attr(met, "latitude"),
+                        tav = attr(met, "tav"),
+                        amp = attr(met, "amp"),
+                        colnames = attr(met, "colnames"),
+                        units = attr(met, "units"),
+                        comments = attr(met, "comments"))
+  }  
+  
+  fix2 <- FALSE
+  ## Is the last year a leap year?
+  if(is_leap_year(met$year[nrow(met)]) && met$day[nrow(met)] == 365){
+      ## This adds a row at the end when it is a leap year and it only has 365 days
+    if(fix1) met <- ans
+    nms.met <- names(met)
+    fill.dat <- as.data.frame(matrix(ncol = length(nms.met)))
+    names(fill.dat) <- nms.met
+    fill.row <- data.frame(year = met$year[nrow(met)],
+                           day = 366,
+                           fill.dat[, -c(1:2)])
+    ans <- rbind(met, fill.row)
+    ans$date <- NULL
+    fix2 <- TRUE
+  }
+  
+  if(!fix1 && !fix2)
+    stop("No discontinuities found", call. = FALSE)
+  
   attr(ans, "filename") <- attr(met, "filename")
   attr(ans, "site") <- attr(met, "site")
   attr(ans, "latitude") <- attr(met, "latitude")
@@ -464,6 +525,23 @@ napad_apsim_met <- function(met){
   attr(ans, "comments") <- attr(met, "comments")
   class(ans) <- c("met","data.frame")
   return(ans) 
+}
+
+is_leap_year <- function(year){
+  if((year %% 4) == 0){
+    if((year %% 100) == 0){
+      if((year %% 400) == 0){
+        ans <- TRUE
+      }else{
+        ans <- FALSE
+      }
+    }else{
+      ans <- TRUE
+    }
+  }else{
+    ans <- FALSE
+  }
+  return(ans)
 }
 
 #' Simple utility for converting a data frame to an object of class met
@@ -505,7 +583,7 @@ as_apsim_met <- function(x,
   if(!inherits(x, "data.frame"))
     stop("Object should be of class data.frame")
 
-  if(ncol(x) != 6)
+  if(ncol(x) != 6 && length(colnames) == 6)
     stop("If number of columns is not 6 then provide column names")
   
   names(x) <- colnames
@@ -539,7 +617,10 @@ as_apsim_met <- function(x,
   return(x) 
 }
   
-#' Calculating Thermal Time using a variety of methods
+#' Calculating Thermal Time using a variety of methods.
+#' The function will fail if the method is not selected.
+#' Also, it does not work if each year does not have at least
+#' 365 days.
 #' 
 #' @title Calculates Thermal Time taking a \sQuote{met} object
 #' @name tt_apsim_met
@@ -591,11 +672,13 @@ tt_apsim_met <- function(met, dates,
   if(!missing(met) && !inherits(met, "met"))
     stop("Object met should be of class met")
 
+  if(identical(method, c("Classic_TT", "HeatStress_TT", "CropHeatUnit_TT", "APSIM_TT", "CERES_TT", "all")))
+    stop("Please select a method. Not all of them are implemented at the moment.", call. = FALSE)
+  
   method <- match.arg(method, several.ok = TRUE)
   
-  if("all" %in% method) method <- c("Classic_TT", "HeatStress_TT", "CropHeatUnit_TT")
+  if("all" %in% method) method <- c("Classic_TT", "HeatStress_TT", "CropHeatUnit_TT", "APSIM_TT")
   
-  if("APSIM_TT" %in% method) stop("not implemented yet.")
   if("CERES_TT" %in% method) stop("not implemented yet.")
   
   if(is.na(as.Date(dates[1], format = dates.format))) stop("first date might be in the wrong format")
@@ -611,9 +694,14 @@ tt_apsim_met <- function(met, dates,
   if("Classic_TT" %in% method) met$Classic_TT <- 0
   if("HeatStress_TT" %in% method) met$HeatStress_TT <- 0
   if("CropHeatUnit_TT" %in% method) met$CropHeatUnit_TT <- 0
+  # if("APSIM_TT" %in% method) met$APSIM_TT <- 0
+  if("APSIM_TT" %in% method) stop("Not implemented yet.", call. = FALSE)
   
   if(nrow(met) != nrow(tmpd))
     warning("Days for each year should be complete")
+  
+  if(any(table(met$year) < 365))
+    stop("Each year should have at least 365 days", call. = FALSE)
   
   ## This first instance will result in calculating TT for every year
   if(inherits(dates, "character")){
@@ -637,6 +725,7 @@ tt_apsim_met <- function(met, dates,
   cum.classic.tt <- 0
   cum.heatstress.tt <- 0
   cum.cropheatunit.tt <- 0
+  cum.apsim.tt <- 0
   k <- 0
   
   for(i in 1:nrow(met)){
@@ -671,10 +760,16 @@ tt_apsim_met <- function(met, dates,
         cum.cropheatunit.tt <- cum.cropheatunit.tt + cropheatunit.tt
         met$CropHeatUnit_TT[i] <- cum.cropheatunit.tt
       }
+      if("APSIM_TT" %in% method){
+        apsim.tt <- apsim_tt(met$maxt[i], met$mint[i], Tb = base_temp, To = max_temp, cardinal.temps = x_temp, gdd.coord = y_tt)
+        cum.apsim.tt <- cum.apsim.tt + apsim.tt
+        met$APSIM_TT[i] <- cum.apsim.tt
+      }
     }else{
       cum.classic.tt <- 0
       cum.heatstress.tt <- 0
       cum.cropheatunit.tt <- 0
+      cum.apsim.tt <- 0
     }
   }
 
@@ -682,5 +777,493 @@ tt_apsim_met <- function(met, dates,
   return(met)
 }
   
+## APSIM calculation of thermal time
+########################################################################################################
+########################################################################################################
+## Functions to convert temperature to gdd following APSIM's XY interpolation method. 
+## There are three options available in this script. Users can modify or add new functions. 
+## We used the temp2gdd function in the paper (APSIM-soybean version 7.5).
+## We provide two more options as examples (temp3gdd and temp4dd function)
+## See supplementary materials, figure S1  for the shape of each function
+
+## function 1 or method 1 (temp2gdd)
+temp2gdd <- function(temp, cardinal.temps = c(10,30,40), gdd.coord=c(0,20,0)){
   
+  gdd <- numeric(length(temp))
   
+  for(i in 1:length(temp)){
+    if(temp[i] <= cardinal.temps[2]){
+      slp <- c(gdd.coord[2]-gdd.coord[1])/c(cardinal.temps[2]-cardinal.temps[1])    # slope = (20-0)/(30-10)=1
+      int <- gdd.coord[1]                                                           # int   = 0
+      gdd[i] <- int + slp * (temp[i] - cardinal.temps[1])    
+    }else{
+      slp <- c(gdd.coord[3]-gdd.coord[2])/c(cardinal.temps[3]-cardinal.temps[2])    # slope = (0-20)/(40-30)=-2
+      int <- gdd.coord[2]                                                           # int   = 20
+      gdd[i] <- int + slp * (temp[i] - cardinal.temps[2])
+    }
+  }
+  
+  gdd <- pmax(gdd,0)
+  return(gdd)
+}
+
+
+## function 2 or method 2 (temp3gdd)
+temp3gdd <- function(temp, cardinal.temps = c(0,15,30,40), gdd.coord=c(0,5,20,0)){
+  
+  gdd <- numeric(length(temp))
+  
+  for(i in 1:length(temp)){
+    if(temp[i] <= cardinal.temps[2]){                                                 # temp < 15
+      slp <- c(gdd.coord[2]-gdd.coord[1])/c(cardinal.temps[2]-cardinal.temps[1])      # slope = (5-0)/(15-0)=0.333
+      int <- gdd.coord[1]                                                             # int = gdd.coord[1] = 0
+      gdd[i] <- int + slp * (temp[i] - cardinal.temps[1])                             # if temp = 15, gdd=5
+    }
+    if(temp[i] > cardinal.temps[2] && temp[i] <= cardinal.temps[3]){                  # temp < 30
+      slp <- c(gdd.coord[3]-gdd.coord[2])/c(cardinal.temps[3]-cardinal.temps[2])      # slope = (20-5)/(30-15)=1
+      int <- gdd.coord[2]                                                             # int = gdd.coord[2] = 5
+      gdd[i] <- int + slp * (temp[i] - cardinal.temps[2])                             # if temp = 30, gdd=20
+    }
+    if(temp[i] > cardinal.temps[3] && temp[i] <= cardinal.temps[4]){                  # temp < 40
+      slp <- c(gdd.coord[4]-gdd.coord[3])/c(cardinal.temps[4]-cardinal.temps[3])      # slope = (0-20)/(40-30)=-2
+      int <-  gdd.coord[3]                                                            # int = gd.coord[3]=20
+      gdd[i] <- int + slp * (temp[i] - cardinal.temps[3])                             # if temp = 40, gdd=0
+      #}else{
+      # gdd[i] <- 0
+    }
+  }
+  gdd <- pmax(gdd,0)
+  return(gdd)
+}
+
+
+## function 3 or method 3 (temp4gdd)
+temp4gdd <- function(temp, cardinal.temps = c(7,28,35,45), gdd.coord=c(0,21,21,0)){
+  
+  gdd <- numeric(length(temp))
+  
+  for(i in 1:length(temp)){
+    if(temp[i] <= cardinal.temps[2]){                                                 # temp < 28
+      slp <- c(gdd.coord[2]-gdd.coord[1])/c(cardinal.temps[2]-cardinal.temps[1])      # slope = (21-0)/(28-7)=1
+      int <- gdd.coord[1]                                                             # int = gdd.coord[1] = 0
+      gdd[i] <- int + slp * (temp[i] - cardinal.temps[1])                             # if temp = 28, gdd=21
+    }
+    if(temp[i] > cardinal.temps[2] && temp[i] <= cardinal.temps[3]){                  # temp < 35
+      slp <- c(gdd.coord[3]-gdd.coord[2])/c(cardinal.temps[3]-cardinal.temps[2])      # slope = (21-21)/(35-28)=0
+      int <- gdd.coord[2]                                                             # int = gdd.coord[2] = 21
+      gdd[i] <- int + slp * (temp[i] - cardinal.temps[2])                             # if temp = 35, gdd=21
+    }
+    if(temp[i] > cardinal.temps[3] && temp[i] <= cardinal.temps[4]){                  # temp < 45
+      slp <- c(gdd.coord[4]-gdd.coord[3])/c(cardinal.temps[4]-cardinal.temps[3])      # slope = (0-21)/(45-35)=-2.1
+      int <-  gdd.coord[3]                                                            # int = gd.coord[3]=21
+      gdd[i] <- int + slp * (temp[i] - cardinal.temps[3])                             # if temp = 45, gdd=0
+    }
+  }
+  gdd <- pmax(gdd,0)
+  return(gdd)
+}
+
+
+########################################################################################################
+########################################################################################################
+## This function calculates daily gdd using the 3-hour interval approach from APSIM
+## Min and max daily temperature, Tb, To, and interpolation method are the inputs (see above for options).
+## We used the "temp2gdd" interpolation method and APSIM's default Tb and To values (Table 1).   
+
+apsim_tt <- function(maxt, mint, Tb=10, To=30, cardinal.temps, gdd.coord){
+  
+  h2c <- function(hr){
+    ans <- 0.92105 + 0.114 * hr - 0.0703 * (hr^2) + 0.0053*(hr^3)   # apsim equation  
+    ans
+  } 
+  
+  method <- "temp2gdd"
+  if(missing(cardinal.temps) && missing(gdd.coord)){
+    method <- "temp2gdd"
+  }else{
+    if(length(cardinal.temps) == 3) method <- "temp2gdd"
+    if(length(cardinal.temps) == 4) method <- "temp3gdd"
+    if(length(cardinal.temps) == 5) 
+      stop("Method not implemented yet", call. = FALSE)
+  } 
+
+  if(method == "temp2gdd"){
+    if(mint < Tb || maxt > To){
+      temp1 <- mint + h2c(1)*(maxt - mint)
+      temp2 <- mint + h2c(2)*(maxt - mint)
+      temp3 <- mint + h2c(3)*(maxt - mint)
+      temp4 <- mint + h2c(4)*(maxt - mint)
+      temp5 <- mint + h2c(5)*(maxt - mint)
+      temp6 <- mint + h2c(6)*(maxt - mint)
+      temp7 <- mint + h2c(7)*(maxt - mint)
+      temp8 <- mint + h2c(8)*(maxt - mint)
+      
+      if(missing(cardinal.temps) && missing(gdd.coord)){
+        gdd <- mean(temp2gdd(c(temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8)))    
+      }else{
+        if(length(cardinal.temps) != 3 || length(gdd.coord) != 3)
+          stop("Length of cardinal.temps and/or gdd.coord is not equal to 3", call. = FALSE)
+        gdd <- mean(temp2gdd(c(temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8),
+                             cardinal.temps = cardinal.temps, gdd.coord = gdd.coord))    
+      }
+      
+    }else{
+      gdd <- temp2gdd((maxt + mint)*0.5)                                                 
+    } 
+  }
+  
+  if(method == "temp3gdd"){
+    if(mint < Tb || maxt > To){
+      temp1 <- mint + h2c(1)*(maxt - mint)
+      temp2 <- mint + h2c(2)*(maxt - mint)
+      temp3 <- mint + h2c(3)*(maxt - mint)
+      temp4 <- mint + h2c(4)*(maxt - mint)
+      temp5 <- mint + h2c(5)*(maxt - mint)
+      temp6 <- mint + h2c(6)*(maxt - mint)
+      temp7 <- mint + h2c(7)*(maxt - mint)
+      temp8 <- mint + h2c(8)*(maxt - mint)
+      
+      if(missing(cardinal.temps) && missing(gdd.coord)){
+        gdd <- mean(temp3gdd(c(temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8)))   
+      }else{
+        if(length(cardinal.temps) != 4 || length(gdd.coord) != 4)
+          stop("Length of cardinal.temps and/or gdd.coord is not equal to 4", call. = FALSE)
+        gdd <- mean(temp3gdd(c(temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8),
+                             cardinal.temps = cardinal.temps, gdd.coord = gdd.coord))    
+      }
+    }else{
+      gdd <- temp3gdd((maxt + mint)*0.5)                                                 
+    }
+  }
+  
+  return(gdd)
+}
+
+## Function to include the photoperiod in an APSIM met file
+pp_apsim_met <- function(metfile, sun_angle=0){
+  
+  if(!inherits(metfile, "met"))
+    stop("Object 'metfile' should be of class 'met'", call. = FALSE)
+  lat0 <-  attr(metfile, "latitude") # read latitude from the Measured file
+  lat <- as.numeric(strsplit(lat0, "=")[[1]][2])
+  day <-  metfile$day                  # read day from the Met file 
+  
+  aeqnox <- 79.25              
+  pi     <- 3.14159265359
+  dg2rdn <- (2.0 * pi) /360.0    
+  decsol <- 23.45116 * dg2rdn  
+  dy2rdn <- (2.0 * pi) /365.25   
+  rdn2hr <- 24.0/(2.0 * pi)      
+  
+  sun_alt <- sun_angle * dg2rdn
+  dec     <- decsol * sin (dy2rdn * (day - aeqnox))
+  latrn   <- lat * dg2rdn
+  slsd    <- sin(latrn) * sin(dec)
+  clcd    <- cos(latrn) * cos(dec)
+  altmn   <- asin(pmin(pmax(slsd - clcd, -1.0), 1.0))
+  altmx   <- asin(pmin(pmax(slsd + clcd, -1.0), 1.0))
+  alt     <- pmin(pmax(sun_alt, altmn), altmx)
+  
+  coshra1 <- (sin (alt) - slsd) /clcd
+  coshra  <- pmin(pmax(coshra1, -1.0), 1.0)
+  hrangl  <- acos (coshra)
+  PP      <- hrangl * rdn2hr * 2.0          
+  metfile$photoperiod <- PP
+  return(metfile)
+}
+
+
+#' @title Plot method for object of class \sQuote{met} 
+#' @name plot.met
+#' @description Some plots are similar to APSIM, others are different
+#' and more useful in some respects
+#' @param x object of class \sQuote{met}
+#' @param ... additional arguments. None used at the moment.
+#' @param years optional argument to subset years
+#' @param met.var optional argument to choose a certain variable. By default,
+#' temperature (min and max) is displayed
+#' @param plot.type type of plot, default is \sQuote{ts} or time-series. 
+#' The options \sQuote{area} and \sQuote{col} are only available when summary = TRUE.
+#' @param cumulative default is FALSE. Especially useful for \sQuote{rain}.
+#' @param facet whether to display the years in in different panels (facets). Not implemented yet.
+#' @param climatology logical (default FALSE). Whether to display the \sQuote{climatology}
+#' which would be the average of the data. 
+#' Ideally, there are at least 20 years in the \sQuote{met} object.
+#' @param summary whether to plot \sQuote{summary} data. (default FALSE).
+#' @export
+#' @examples 
+#' \donttest{
+#' ## Read in and plot a met file
+#' extd.dir <- system.file("extdata", package = "apsimx")
+#' ames <- read_apsim_met("Ames.met", src.dir = extd.dir)
+#' plot(ames, years = 2012:2015)
+#' ## Perhaps more informative
+#' plot(ames, years = 2012:2015, cumulative = TRUE)
+#' ## for rain
+#' plot(ames, met.var = "rain", years = 2012:2015, cumulative = TRUE)
+#' plot(ames, met.var = "rain", years = 2012:2015, cumulative = TRUE, climatology = TRUE)
+#' }
+#' 
+plot.met <- function(x, ..., years, met.var, 
+                     plot.type = c("ts", "area", "col"), 
+                     cumulative = FALSE,
+                     facet = FALSE,
+                     climatology = FALSE,
+                     summary = FALSE){
+  
+  if(!requireNamespace("ggplot2", quietly = TRUE)){
+    warning("ggplot2 is required for this plotting function")
+    return(NULL)
+  }
+  
+  plot.type <- match.arg(plot.type)
+  
+  if(plot.type %in% c("area", "col") && !summary)
+    stop("plot.type = area and plot.type = col are only available when summary = TRUE", call. = FALSE)
+  
+  ## Global variables?
+  day <- NULL; cum.maxt <- NULL; Years <- NULL; cum.mint <- NULL;
+  value <- NULL; temperature <- NULL; maxt <- NULL; mint <- NULL;
+  cum.met.var <- NULL; year <- NULL; 
+  ## Calculate climatology before subsetting years
+  if(climatology){
+    maxt.climatology <- stats::aggregate(maxt ~ day, data = x, FUN = mean)
+    mint.climatology <- stats::aggregate(mint ~ day, data = x, FUN = mean)
+    rain.climatology <- stats::aggregate(rain ~ day, data = x, FUN = mean)
+    radn.climatology <- stats::aggregate(radn ~ day, data = x, FUN = mean)
+    met.var.climatology <- cbind(maxt.climatology, 
+                                 mint.climatology[,"mint", drop = FALSE], 
+                                 rain.climatology[,"rain", drop = FALSE], 
+                                 radn.climatology[,"radn", drop = FALSE])
+    if(any(grepl("vp", names(x), fixed = TRUE))){
+      vp.climatology <- stats::aggregate(vp ~ day, data = x, FUN = mean)
+      met.var.climatology <- cbind(met.var.climatology, vp.climatology[, "vp", drop = FALSE])
+    }
+    if(any(grepl("windspeed", names(x), fixed = TRUE))){
+      windspeed.climatology <- stats::aggregate(windspeed ~ day, data = x, FUN = mean)
+      met.var.climatology <- cbind(met.var.climatology, windspeed.climatology[, "windspeed", drop = FALSE])
+    }
+  }
+
+  if(!missing(years)){
+    if(max(years) > max(x$year) || min(years) < min(x$year))
+      stop("Selected year is not within the range of the data", call. = FALSE)    
+  }
+
+  if(!missing(years)){
+    x <- x[x$year %in% years,]
+  }
+  
+  x$Years <- as.factor(x$year)
+  
+  if(isFALSE(summary)){
+    if(!missing(met.var)){
+      if(!met.var %in% names(x)){
+        cat("Variables in met:", names(x), "\n")
+        stop("met.var was not found in the names of the 'met' object", call. = FALSE)
+      }
+      if(met.var %in% c("day", "year"))
+        stop("year or day cannot be used as a 'met.var'", call. = FALSE)
+    }    
+  }
+
+  if(isFALSE(summary)){
+    if(plot.type == "ts"){
+      if(missing(met.var)){
+        if(cumulative){
+          dat <- NULL
+          for(i in seq_along(sort(unique(x$year)))){
+            yr <- sort(unique(x$year))[i]
+            x.tmp <- x[x$year == yr,]
+            x.ag.maxt <- cumsum(x.tmp$maxt)
+            x.ag.mint <- cumsum(x.tmp$mint)
+            dat <- rbind(dat, data.frame(year = yr, day = 1:nrow(x.tmp), cum.maxt = x.ag.maxt, cum.mint = x.ag.mint))
+          }
+          
+          dat$Years <- as.factor(dat$year)
+          
+          if(climatology){
+            maxt.climatology$cum.maxt <- cumsum(maxt.climatology$maxt)
+            maxt.climatology$climatology <- "climatology"
+            mint.climatology$cum.mint <- cumsum(mint.climatology$mint)
+            mint.climatology$climatology <- "climatology"
+            gp1 <- ggplot2::ggplot() + 
+                            ggplot2::geom_line(data = dat, ggplot2::aes(day, cum.maxt, color = Years)) +
+                            ggplot2::geom_line(data = dat, ggplot2::aes(day, cum.mint, color = Years), linetype = 2) +
+                            ggplot2::geom_line(data = maxt.climatology, ggplot2::aes(day, cum.maxt, linetype = climatology), color = "black") + 
+                            ggplot2::geom_line(data = mint.climatology, ggplot2::aes(day, cum.mint, linetype = climatology), color = "black", linetype = 2) +
+                            ggplot2::scale_linetype_manual(name = NULL, values = 1) + 
+                            ggplot2::geom_hline(yintercept = 0, linetype = 3) + 
+                            ggplot2::ylab("Cumulative temperature (degree C)") 
+          }else{
+            dat1 <- data.frame(day = dat$day, temperature = "maxt", value = dat$cum.maxt, Years = dat$Years)
+            dat2 <- data.frame(day = dat$day, temperature = "mint", value = dat$cum.mint, Years = dat$Years)
+            dat <- rbind(dat1, dat2)
+            gp1 <- ggplot2::ggplot(data = dat) + 
+              ggplot2::geom_line(ggplot2::aes(day, value, color = Years, linetype = temperature)) +
+              ggplot2::geom_line(ggplot2::aes(day, value, color = Years, linetype = temperature)) +
+              ggplot2::scale_linetype_manual(name = NULL, values = c(1, 2)) + 
+              ggplot2::geom_hline(yintercept = 0, linetype = 3) + 
+              ggplot2::ylab("Cumulative temperature (degree C)") 
+          }
+          print(gp1)        
+        }else{
+          if(climatology){
+            maxt.climatology$climatology <- "climatology"
+            mint.climatology$climatology <- "climatology"
+            x$Years <- as.factor(x$year)
+            gp1 <- ggplot2::ggplot() + 
+                            ggplot2::geom_line(data = x, ggplot2::aes(day, maxt, color = Years)) +
+                            ggplot2::geom_line(data = x, ggplot2::aes(day, mint, color = Years), linetype = 2) +
+                            ggplot2::geom_line(data = maxt.climatology, ggplot2::aes(day, maxt, linetype = climatology), color = "black") +
+                            ggplot2::geom_line(data = mint.climatology, ggplot2::aes(day, mint, linetype = climatology), color = "black", linetype = 2) +
+                            ggplot2::scale_linetype_manual(name = NULL, values = 1) + 
+                            ggplot2::geom_hline(yintercept = 0, linetype = 3) + 
+                            ggplot2::ylab("Temperature (degree C)")                        
+          }else{
+            gp1 <- ggplot2::ggplot(data = x) + 
+              ggplot2::geom_line(ggplot2::aes(day, maxt, color = Years)) +
+              ggplot2::geom_line(ggplot2::aes(day, mint, color = Years), linetype = 2) +
+              ggplot2::geom_hline(yintercept = 0, linetype = 3) + 
+              ggplot2::ylab("Temperature (degree C)")            
+          }
+          print(gp1)        
+        }
+      }else{
+        if(met.var %in% c("rain", "radn", "vp", "rh", "maxt", "mint", "windspeed")){
+          
+          met.var.units <- switch(met.var,
+                                  rain = "(mm)",
+                                  radn = "(MJ/m2)",
+                                  rh = "(%)",
+                                  maxt = "(degrees C)",
+                                  mint = "(degrees C)",
+                                  vp = "(hPa)",
+                                  windspeed = "(m/s)")
+
+          if(climatology){
+            met.var.clima <- met.var.climatology[ ,c("day", met.var)]
+            met.var.clima$climatology <- "climatology"            
+          }
+
+          if(cumulative){
+            ylabel <- paste("Cumulative ", met.var, met.var.units)
+            dat <- NULL
+            for(i in seq_along(sort(unique(x$year)))){
+              yr <- sort(unique(x$year))[i]
+              x.tmp <- x[x$year == yr,]
+              x.ag.met.var <- cumsum(x.tmp[[met.var]])
+              dat <- rbind(dat, data.frame(year = yr, day = 1:nrow(x.tmp), cum.met.var = x.ag.met.var))
+            }
+            
+            dat$Years <- as.factor(dat$year)
+            if(climatology){
+              met.var.clima$cum.met.var <- cumsum(met.var.clima[[met.var]])
+              
+              gp1 <- ggplot2::ggplot() + 
+                ggplot2::geom_line(data = dat, ggplot2::aes(day, cum.met.var, color = Years)) +
+                ggplot2::geom_line(data = met.var.clima, ggplot2::aes(day, cum.met.var, linetype = climatology), color = "black") +
+                ggplot2::scale_linetype_manual(name = NULL, values = 1) + 
+                ggplot2::ylab(ylabel)                            
+            }else{
+              gp1 <- ggplot2::ggplot(data = dat) + 
+                ggplot2::geom_line(ggplot2::aes(day, cum.met.var, color = Years)) +
+                ggplot2::ylab(ylabel)              
+            }
+            print(gp1)        
+          }else{
+            ylabel <- paste(met.var, met.var.units)
+            if(climatology){
+              gp1 <- ggplot2::ggplot() + 
+                ggplot2::geom_point(data = x, ggplot2::aes(day, 
+                                                 y = eval(parse(text = eval(met.var))),
+                                                 color = Years)) +
+                ggplot2::geom_line(data = met.var.clima, ggplot2::aes(day, 
+                                                 y = eval(parse(text = eval(met.var))),
+                                                 linetype = climatology)) +
+                ggplot2::scale_linetype_manual(name = NULL, values = 1) + 
+                ggplot2::ylab(ylabel)                  
+            }else{
+              gp1 <- ggplot2::ggplot(data = x) + 
+                              ggplot2::geom_point(ggplot2::aes(day, 
+                                                 y = eval(parse(text = eval(met.var))),
+                                                 color = Years)) +
+                              ggplot2::ylab(ylabel)              
+            }
+            print(gp1)        
+          }
+        }
+      }
+    }    
+  }else{
+    
+    if(missing(met.var)){
+      met.var <- c("avg_maxt", "avg_mint")
+    }
+    
+    if(is.null(list(...)$compute.frost)){
+      valid.met.vars <- c("high_maxt", "high_mint", "avg_maxt", "avg_mint", "low_maxt", "low_mint", "rain_sum", "radn_sum", "radn_avg") 
+    }else{
+      valid.met.vars <- c("high_maxt", "high_mint", "avg_maxt", "avg_mint", "low_maxt", "low_mint", "rain_sum", "radn_sum", "radn_avg", "first_half_frost","second_half_frost","frost_free_period","frost_days") 
+    }
+    sel.met.var <- sapply(met.var, function(x) grep(x, valid.met.vars)) 
+    if(length(sel.met.var) == 0 || is.list(sel.met.var)){
+      cat("Valid met.vars:", valid.met.vars, "\n")
+      stop("'met.var' is not a valid meteorological variable", call. = FALSE)
+    }else{
+      met.var <- valid.met.vars[sel.met.var] 
+    }
+    
+    if(any(met.var %in% c("high_maxt", "high_mint", "avg_maxt", "avg_mint", "low_maxt", "low_mint")))
+      ylabs <- "Temperature (degree C)"
+    
+    if(any(grepl("rain_sum", met.var)) && length(met.var) > 1)
+      stop("If 'rain_sum' is chosen, it should be the only met variable", call. = FALSE)
+    
+    if(any(met.var %in% c("rain_sum")))
+      ylabs <- "Rainfall (mm)"
+    
+    if(any(grepl("radn", met.var)) && length(met.var) > 2)
+      stop("If 'radn' is chosen, it should not be mixed with other variables", call. = FALSE)
+    
+    if(any(met.var %in% c("radn_sum", "radn_avg")))
+      ylabs <- "Radiation (MJ/m2)"
+    
+    if(any(grepl("frost", met.var)))
+      ylabs <- "Days"
+      
+    stmp <- summary(x, ...)
+    tmp <- NULL
+    for(i in seq_along(met.var)){
+      dat <- data.frame(year = stmp$year, met.var = met.var[i], value = stmp[[met.var[i]]])
+      tmp <- rbind(tmp, dat)
+    }
+    
+    if(plot.type == "ts"){
+      gp1 <- ggplot2::ggplot(data = tmp, ggplot2::aes(x = year, y = value, color = met.var)) + 
+        ggplot2::geom_point() + 
+        ggplot2::geom_line() + 
+        ggplot2::ylab(ylabs)
+      print(gp1)      
+    }
+    
+    if(plot.type == "area"){
+      gp1 <- ggplot2::ggplot(data = tmp, ggplot2::aes(x = year, y = value, fill = met.var)) + 
+        ggplot2::geom_area() + 
+        ggplot2::ylab(ylabs)
+      print(gp1)      
+    }
+    
+    if(plot.type == "col"){
+      gp1 <- ggplot2::ggplot(data = tmp, ggplot2::aes(x = year, y = value, fill = met.var)) + 
+        ggplot2::geom_col() + 
+        ggplot2::ylab(ylabs)
+      print(gp1)      
+    }
+  }
+  invisible(gp1)
+}
+
+
+
+

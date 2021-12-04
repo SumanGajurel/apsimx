@@ -86,16 +86,36 @@ inspect_apsimx_replacement <- function(file = "", src.dir = ".",
     gfixed <- FALSE
     gignore.case <- FALSE
   }
-    
-  
+
   if(length(frn) == 0) stop(paste0(root," not found"))
   
-  if(length(frn) > 1 || !missing(root)){
-    if(is.na(root[[2]])){
-      cat("These positions matched ", root[[1]], " ", frn, "\n")
-      stop("Multiple root nodes found. Please provide a position")
+  if(length(frn) > 1){
+    if(length(root) == 1){
+      cat("root matched multiple positions", frn, "\n")
+      stop("Change it so that it is unique", call. = FALSE)
     }else{
-      replacements.node <- apsimx_json$Children[[frn[root[[2]]]]]
+      if(is.na(root[[2]])){
+        cat("These positions matched ", root[[1]], " ", frn, "\n")
+        stop("Multiple root nodes found. Please provide a position", call. = FALSE)
+      }else{
+        if(length(root) == 2){
+          if(is.numeric(root[[2]])){
+            replacements.node <- apsimx_json$Children[[frn[root[[2]]]]]    
+          }else{
+            root.node.0.names <- sapply(apsimx_json$Children, function(x) x$Name)
+            wcore1 <- grep(as.character(root[1]), root.node.0.names)
+            if(length(wcore1) == 0 || length(wcore1) > 1)
+              stop("no root node label in position 1 found or root is not unique")
+            root.node.0 <- apsimx_json$Children[[wcore1]]
+            root.node.0.child.names <- sapply(root.node.0$Children, function(x) x$Name)  
+            wcore2 <- grep(as.character(root[2]), root.node.0.child.names)
+            if(length(wcore2) == 0 || length(wcore2) > 1)
+              stop("no root node label in position 2 found or root is not unique")
+            replacements.node <- apsimx_json$Children[[wcore1]]$Children[[wcore2]]$Children 
+            parm.path.0 <- paste0(parm.path.0, ".", apsimx_json$Children[[wcore1]]$Children[[wcore2]])
+          }
+        }
+      }  
     }
   }else{
     replacements.node <- apsimx_json$Children[[frn]]
@@ -153,7 +173,7 @@ inspect_apsimx_replacement <- function(file = "", src.dir = ".",
                                     FUN.VALUE = "character")
   if(display.available){
     cat("Level: node \n")
-    str_list(rep.node)
+    try(str_list(rep.node), silent = TRUE)
   } 
   
   ## If node.child is missing try to handle it gracefully
@@ -185,7 +205,7 @@ inspect_apsimx_replacement <- function(file = "", src.dir = ".",
     if(verbose) cat("no node sub-children available or parm not equal to null \n")
     return(invisible(format_parm_path(parm.path, parm)))
   }else{
-    if(display.available) str_list(rep.node.child)
+    if(display.available) try(str_list(rep.node.child), silent = TRUE)
   }
   
   if(verbose) cat("node subchild:", node.subchild, "\n")
@@ -217,7 +237,7 @@ inspect_apsimx_replacement <- function(file = "", src.dir = ".",
   }else{
     ## The problem here is that rep.node.subchild can either be
     ## named or nameless
-    if(display.available) str_list(rep.node.subchild)
+    if(display.available) try(str_list(rep.node.subchild), silent = TRUE)
   }
   
   ## This is intended to be used to handle a missing node.subsubchild gracefully
@@ -549,6 +569,10 @@ unpack_node <- function(x, parm = NULL, display.available = FALSE){
         if(class(tcp) != "try-error"){
           cat(names(node.child), "\n")
           tcp
+        }else{
+          print(unlist(x[[i]]))
+          print(parm)
+          stop("There was an error in cat_parm", call. = FALSE)
         }
       }
       ## Let's handle 'Children' now
@@ -568,7 +592,7 @@ unpack_node <- function(x, parm = NULL, display.available = FALSE){
       
         
 cat_parm <- function(x, parm = NULL){
-  
+
   ## This will print an element or multiple elements 
   ## When x is a simple list structure, with no 
   ## Children
@@ -578,8 +602,16 @@ cat_parm <- function(x, parm = NULL){
     if(is.null(parm)){
       cat(x.nms[i], ":", unlist(x[i]), "\n")
     }else{
-      if(x.nms[i] %in% parm || any(sapply(parm, function(x) grepl(x, unlist(x[i]))))){
-        cat(x.nms[i], ":", unlist(x[i]), "\n")
+      ## First case is name is in parm
+      if(!is.null(x.nms[i])){
+        if(grepl(parm, x.nms[i]))
+           cat(x.nms[i], ":", unlist(x[i]), "\n")
+      }else{
+        ## Second case is
+        ulx <- unlist(x[i])
+        if(any(sapply(parm, function(x1) grepl(x1, ulx)))){
+          cat(x.nms[i], ":", unlist(x[i]), "\n")  
+        }
       }
     }
   }
@@ -587,6 +619,7 @@ cat_parm <- function(x, parm = NULL){
 
 ## list structure
 str_list <- function(x){
+  cNms <- NA
   ## List name
   cat("list Name:",x$Name,"\n")
   ## Number of elements
@@ -604,7 +637,7 @@ str_list <- function(x){
     if(length(cnms) != 0) cat("Children names:",cnms,"\n")
     if(length(cnms) == 0 && cln > 0){
       cNms <- sapply(x$Children, function(x) x$Name)
-      cat("Children Names:",cNms,"\n")
+      if(length(cNms) > 0) cat("Children Names:",cNms,"\n")
     }
   }
   invisible(list(ln=ln,lnms=lnms,cln=cln,cnms=cnms,cNms=cNms))

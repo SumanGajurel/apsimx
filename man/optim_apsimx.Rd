@@ -45,7 +45,10 @@ the \sQuote{replacement} component. Its length should be equal to the length or 
 
 \item{root}{root argument for \code{\link{edit_apsimx_replacement}}}
 
-\item{initial.values}{(required) supply the initial values of the parameters. (Working on fixing this...)}
+\item{initial.values}{(required) supply the initial values of the parameters. (Working on fixing this...).
+If the parameters to be optimized correspond to a single value, then a simple numeric vector can be supplied.
+If one or more of the parameters represent a vector in APSIM, then the initial values should be passed as a
+list. At the moment, it is not possible to check if these are appropriate (correct name and length).}
 
 \item{...}{additional arguments to be passed to the optimization algorithm. See \code{\link[stats]{optim}}}
 }
@@ -66,6 +69,12 @@ will edit and overwrite the file during the optimization.
 * When you use the parm.vector.index you cannot edit two separate elements of
 a vector at the same time. This should be used to target a single element of 
 a vector only. (I can add this feature in the future if it is justified.)
+
+* Internally, the optimization is done around the scaled value of the initial parameter
+values. A value of 1 would correspond to the inital value of the parameter. 
+The \sQuote{lower} and \sQuote{upper} (or \sQuote{ub} and \sQuote{lb}) are also scaled 
+to the initial values of the parameters. So, for example, if your initial value is 20 
+and you provide an upper bound of 5, it means that the actual upper value that you are allowing for is 100.
 }
 \note{
 When computing the objective function (residual sum-of-squares) different variables are combined.

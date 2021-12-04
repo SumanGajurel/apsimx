@@ -1,3 +1,10 @@
+#' Suggested reading on the topic of sensitivity analysis:
+#' 
+#' Pianosa et al (2016). Sensitivity analysis of environmental models: A systematic review with practical workflow.
+#' \doi{10.1016/j.envsoft.2016.02.008}
+#' 
+#' Saltelli et al. . Global Sensitivity Analysis.
+#' 
 #' @title Sensitivity Analysis for APSIM Next Generation simulation
 #' @name sens_apsimx
 #' @rdname sens_apsimx
@@ -6,9 +13,9 @@
 #' @param src.dir directory containing the .apsimx file to be run (defaults to the current directory)
 #' @param parm.paths absolute or relative paths of the coefficients to be evaluated. 
 #'             It is recommended that you use \code{\link{inspect_apsimx}} for this
-#' @param parm.vector.index Index to evaluate a specific element of a parameter vector.  At the moment it is
-#' possible to only edit one element at a time. This is because there is a conflict when generating multiple
-#' elements in the candidate vector for the same parameter.
+#' @param convert (logical) This argument is needed if there is a need to pass a vector instead of a single value.
+#' The vector can be passed as a character string (separated by spaces) and it will be converted to a 
+#' numeric vector. It should be either TRUE or FALSE for each parameter.
 #' @param replacement TRUE or FALSE for each parameter. Indicating whether it is part of 
 #' the \sQuote{replacement} component. Its length should be equal to the length or \sQuote{parm.paths}.
 #' @param grid grid of parameter values for the evaluation. It can be a data.frame.
@@ -27,7 +34,7 @@
 
 sens_apsimx <- function(file, src.dir = ".", 
                         parm.paths,
-                        parm.vector.index,
+                        convert,
                         replacement,
                         grid,
                         summary = c("mean", "max", "var", "sd", "none"),
@@ -36,7 +43,7 @@ sens_apsimx <- function(file, src.dir = ".",
                         ...){
   
   if(missing(file))
-    stop("file is missing with no default")
+    stop("file is missing with no default", call. = FALSE)
   
   .check_apsim_name(file)
   .check_apsim_name(src.dir)
@@ -45,20 +52,20 @@ sens_apsimx <- function(file, src.dir = ".",
   file.names <- dir(path = src.dir, pattern = ".apsimx$", ignore.case = TRUE)
   
   if(length(file.names) == 0){
-    stop("There are no .apsimx files in the specified directory to run.")
+    stop("There are no .apsimx files in the specified directory to run.", call. = FALSE)
   }
   
   file <- match.arg(file, file.names)
   
   summary <- match.arg(summary)
   
-  if(missing(parm.vector.index)){
-    parm.vector.index <- rep(-1, length(parm.paths))
+  if(missing(convert)){
+    convert <- rep(FALSE, length(parm.paths))
   }else{
-    if(length(parm.vector.index) != length(parm.paths))
-      stop("parm.vector.index should have length equal to parm.paths") 
-    if(!is.numeric(parm.vector.index))
-      stop("parm.vector.index should be numeric")
+    if(length(convert) != length(parm.paths))
+      stop("convert should have length equal to parm.paths", call. = FALSE) 
+    if(!is.logical(convert))
+      stop("convert should be logical", call. = FALSE)
   }
   
   if(missing(replacement)) replacement <- rep(FALSE, length(parm.paths))
@@ -92,10 +99,11 @@ sens_apsimx <- function(file, src.dir = ".",
     ## Need to edit the parameters in the simulation file or replacement
     for(j in seq_along(parm.paths)){
       ## Edit the specific parameters with the corresponding values
-      if(parm.vector.index[j] <= 0){
+      if(convert[j] <= 0){
         par.val <- grid[i, j]  
       }else{
-        stop("Submit an issue in github if you need this feature", call. = FALSE)
+        ## Converting from character to numeric. Values need to be separated by spaces.
+        par.val <- as.numeric(strsplit(grid[i, j], " ")[[1]])
       }
       
       if(replacement[j]){
@@ -111,14 +119,26 @@ sens_apsimx <- function(file, src.dir = ".",
                                 root = root,
                                 verbose = FALSE) 
       }else{
-        edit_apsimx(file = file, 
-                    src.dir = src.dir,
-                    wrt.dir = src.dir,
-                    node = "Other",
-                    parm.path = parm.paths[j],
-                    overwrite = TRUE,
-                    value = par.val,
-                    verbose = FALSE) 
+        if(missing(root)){
+          edit_apsimx(file = file, 
+                      src.dir = src.dir,
+                      wrt.dir = src.dir,
+                      node = "Other",
+                      parm.path = parm.paths[j],
+                      overwrite = TRUE,
+                      value = par.val,
+                      verbose = FALSE)           
+        }else{
+          edit_apsimx(file = file, 
+                      src.dir = src.dir,
+                      wrt.dir = src.dir,
+                      node = "Other",
+                      parm.path = parm.paths[j],
+                      overwrite = TRUE,
+                      value = par.val,
+                      root = root,
+                      verbose = FALSE)           
+        }
       }
     }
     
@@ -131,17 +151,20 @@ sens_apsimx <- function(file, src.dir = ".",
       stop("Simulation failed for initial parameter combination")
     }
     
+    ## Extract basic information from sim
+    if(i == 1){
+      col.class.numeric <- which(sapply(sim, class) == "numeric") ## Which columns are numeric
+      nms.sim <- names(sim[, col.class.numeric]) ## Names of the columns
+      ncol.class.numeric <- ncol(sim[,col.class.numeric]) 
+    }
+
     if(inherits(sim, "try-error") && i > 1){
-      mat <- matrix(ncol = ncol(sim[,col.class.numeric]))
+      mat <- matrix(ncol = ncol.class.numeric)
       sim.sd <- as.data.frame(mat)
       names(sim.sd) <- nms.sim
       col.sim <- rbind(col.sim, sim.sd)
       next
     } 
-    
-    ## Extract basic information from sim
-    col.class.numeric <- which(sapply(sim, class) == "numeric") ## Which columns are numeric
-    nms.sim <- names(sim[, col.class.numeric]) ## Names of the columns
     
     if(summary == "mean"){
       sim.s <- colMeans(sim[, col.class.numeric], na.rm = TRUE)
@@ -164,7 +187,7 @@ sens_apsimx <- function(file, src.dir = ".",
     }
     
     if(summary == "none"){
-      sim.sd <- cbind(grid[i, ], sim, row.names = NULL)
+      sim.sd <- cbind(grid[i, , drop = FALSE], sim, row.names = NULL)
     }
     
     col.sim <- rbind(col.sim, sim.sd)
@@ -175,7 +198,7 @@ sens_apsimx <- function(file, src.dir = ".",
       
       if(nrow.grid <= 10){
         dftm <- difftime(Sys.time(), start)
-        cat("Progress:", round((i/nrow.grid) * 100), "%. Time elapsed:", dftm, units(dftm)," \n")  
+        cat("Progress:", round((i/nrow.grid) * 100), "%. Time elapsed:", round(dftm, 2), units(dftm)," \n")  
       }else{
         progress.step <- ifelse(nrow.grid <= 20, 10, 5)
         
@@ -183,7 +206,7 @@ sens_apsimx <- function(file, src.dir = ".",
         
         if(prev.div > old.prev.div){
           dftm <- difftime(Sys.time(), start)
-          cat("Progress:", round((i/nrow(grid)) * 100), "%. Time elapsed:", dftm, units(dftm)," \n")  
+          cat("Progress:", round((i/nrow(grid)) * 100), "%. Time elapsed:", round(dftm, 2), units(dftm)," \n")  
           old.prev.div <- prev.div
         } 
       }
@@ -245,7 +268,7 @@ summary.sens_apsim <- function(object, ..., scale = FALSE, select = "all"){
   for(i in seq_along(nms.resp.var)){
     X <- object$grid
     y <- object$grid.sims[,nms.resp.var[i]]
-    if(suppressWarnings(var(y) == 0) || is.character(y[1]) || !is.numeric(y)) next
+    if(suppressWarnings(var(y, na.rm = TRUE) == 0) || is.character(y[1]) || !is.numeric(y)) next
     
     if(scale){
       if(any(sapply(object$grid, function(x) is.character(x) || is.factor(x))))
@@ -256,7 +279,7 @@ summary.sens_apsim <- function(object, ..., scale = FALSE, select = "all"){
     }
     
     frml <- paste("y ~", paste(names(X), collapse = "+"))
-    fit <- lm(formula = frml, data = dat)
+    fit <- stats::lm(formula = frml, data = dat, na.action = "na.omit")
     if(inherits(fit, "try-error")) next
     sfit <- as.matrix(stats::anova(fit))
     cat("Variable:", nms.resp.var[i], "\n")

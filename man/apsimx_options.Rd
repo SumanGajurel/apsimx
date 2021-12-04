@@ -6,6 +6,8 @@
 \usage{
 apsimx_options(
   exe.path = NA,
+  dotnet = FALSE,
+  mono = FALSE,
   examples.path = NA,
   warn.versions = TRUE,
   warn.find.apsimx = TRUE
@@ -13,6 +15,11 @@ apsimx_options(
 }
 \arguments{
 \item{exe.path}{path to apsim executable. White spaces are not allowed.}
+
+\item{dotnet}{logical indicating if APSIM should be run through the dotnet command}
+
+\item{mono}{logical indicating if the mono command should be used when running APSIM. This is for versions 
+for Mac/Linux older than Sept 2021.}
 
 \item{examples.path}{path to apsim examples}
 

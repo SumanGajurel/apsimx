@@ -49,13 +49,32 @@ apsimx <- function(file = "", src.dir = ".",
   file.name.path <- file.path(src.dir, file)
   
   ada <- auto_detect_apsimx()
+  
+  ## Grabs the global variables
+  dotnet.flag <- apsimx::apsimx.options$dotnet
+  mono.flag <- apsimx::apsimx.options$mono
+  
+  if(!missing(xargs)){
+    dotnet.flag <- xargs$dotnet
+    mono.flag <- xargs$mono
+    if(!is.na(xargs$exe.path))
+      ada <- xargs$exe.path
+  } 
 
   if(.Platform$OS.type == "unix"){
-    mono <- system("which mono", intern = TRUE)
-    run.strng <- paste0(mono, " ", ada, " ", file.name.path) ## Could use 'paste' instead I guess...
+    if(dotnet.flag){
+      run.strng <- paste("dotnet", ada, file.name.path)
+    }
+    if(mono.flag){
+      mono <- system("which mono", intern = TRUE)
+      run.strng <- paste(mono, ada, file.name.path) 
+    }
+    if(isFALSE(dotnet.flag) && isFALSE(mono.flag)){
+      run.strng <- paste(ada, file.name.path) 
+    }
     ## Run APSIM-X on the command line
-    if(!missing(xargs)) run.strng <- paste(run.strng, xargs)
-    system(command = run.strng, ignore.stdout = silent)
+    if(!missing(xargs)) run.strng <- paste(run.strng, xargs$xargs.string)
+    res <- system(command = run.strng, ignore.stdout = silent, intern = TRUE)
   }
   
   if(.Platform$OS.type == "windows"){
@@ -64,7 +83,7 @@ apsimx <- function(file = "", src.dir = ".",
     ## I will leave the line below until I'm sure it is not needed
     ## if(src.dir != ".") stop("In Windows you can only run a file from the current directory.")
     run.strng <- paste0(ada, " ", file.name.path)
-    if(!missing(xargs)) run.strng <- paste(run.strng, xargs)
+    if(!missing(xargs)) run.strng <- paste(run.strng, xargs$xargs.string)
     shell(cmd = run.strng, translate = TRUE, intern = TRUE)
   }
 
@@ -99,13 +118,23 @@ apsimx <- function(file = "", src.dir = ".",
 #' @param single.threaded  Run all simulations sequentially on a single thread.
 #' @param cpu.count (Default: -1) Maximum number of threads/processes to spawn for running simulations.
 #' @param simulation.names Only run simulations if their names match this regular expression.
+#' @param dotnet Logical. There is a global option for this argument, but this will override it. This 
+#' can be useful if the goal is to compare an old version of Next Gen (before Sept 2021) with a more
+#' recent version in the same script. This might be needed if you have your own compiled version of APSIM Next Gen.
+#' @param mono Logical. Should be set to TRUE if running a version of APSIM Next Gen from Aug 2021 or older on Mac or Linux.
+#' @param exe.path executable path. This can be useful for having both a global option through \sQuote{apsimx.options} and
+#' a local option that will override that. This option will take precedence.
 #' @return it returns a character vector with the extra arguments.
 #' @export
 
 xargs_apsimx <- function(verbose = FALSE, csv = FALSE, merge.db.files = FALSE, list.simulations = FALSE,
                          list.referenced.filenames = FALSE, single.threaded = FALSE, cpu.count = -1L,
-                         simulation.names = FALSE){
+                         simulation.names = FALSE, dotnet = FALSE, mono = FALSE,
+                         exe.path = NA){
 
+  if(dotnet && mono)
+    stop("either dotnet or mono should be TRUE, but not both", call. = TRUE)
+  
   verbose <- ifelse(verbose, " --verbose", "")
   csv <- ifelse(csv, " --csv", "")
   merge.db.files <- ifelse(merge.db.files, " --merge-db-files", "")
@@ -123,6 +152,7 @@ xargs_apsimx <- function(verbose = FALSE, csv = FALSE, merge.db.files = FALSE, l
   ## Remove beggining or trailing spaces
   xargs.string <- gsub("^\\s+|\\s+$", "", xargs.string)
   xargs.string
+  ans <- list(xargs.string = xargs.string, dotnet = dotnet, mono = mono, exe.path = exe.path)
 }
 
 ## This is an internal function so I won't export/document it
@@ -148,7 +178,11 @@ auto_detect_apsimx <- function(){
       ## If only one version of APSIM-X is present
       ## APSIM executable
       st1 <- "/Applications/"
-      st3 <- "/Contents/Resources/Bin/Models.exe" 
+      st3 <- "/Contents/Resources/bin/Models.exe"   
+      if(apsimx.options$dotnet)  st3 <- gsub("exe$", "dll", st3) 
+      if(isFALSE(apsimx.options$mono) && isFALSE(apsimx.options$dotnet)) 
+        st3 <- "/Contents/Resources/bin/Models"
+
       if(length(find.apsim) == 1){
         apsimx.name <- laf[find.apsim]
         apsimx_dir <- paste0(st1, apsimx.name, st3)
@@ -190,11 +224,15 @@ auto_detect_apsimx <- function(){
       }
       ## APSIM executable
       st1 <- "/usr/local/lib/apsim/"
-      st3 <- "/Bin/Models.exe" 
+      st3 <- "/bin/Models.exe" 
+      if(apsimx.options$dotnet) st3 <- gsub("exe$", "dll", st3) 
+      if(isFALSE(apsimx.options$mono) && isFALSE(apsimx.options$dotnet)) 
+        st3 <- "/bin/Models"
+      
       if(length(find.apsim) == 1){
         apsimx.versions <- list.files("/usr/local/lib/apsim")
         apsimx.name <- apsimx.versions
-        apsimx_dir <- paste0(st1,apsimx.name,st3)
+        apsimx_dir <- paste0(st1, apsimx.name, st3)
       }
       
       ## Note: Apparently Debian does not tolerate multiple 
@@ -207,7 +245,7 @@ auto_detect_apsimx <- function(){
                     Choosing the newest one:", newest.version))
         }
         apsimx.name <- newest.version
-        apsimx_dir <- paste0(st1,apsimx.name,st3)
+        apsimx_dir <- paste0(st1, apsimx.name, st3)
       }
     }
   }
@@ -233,7 +271,9 @@ auto_detect_apsimx <- function(){
         return(apsimx_dir)        
     }
     
-    st3 <- "/Bin/Models.exe" 
+    st3 <- "/bin/Models.exe" 
+    if(apsimx.options$dotnet) st3 <- gsub("exe$", "dll", st3) 
+    
     if(length(find.apsim) == 1){
       apsimx.versions <- laf[find.apsim]
       apsimx.name <- apsimx.versions
@@ -289,9 +329,9 @@ auto_detect_apsimx_examples <- function(){
       
       if(length(find.apsim) > 1){
         newest.version <- laf[find.apsim][length(find.apsim)]
-        if(apsimx::apsimx.options$warn.versions){
+        if(apsimx::apsimx.options$warn.versions && is.na(apsimx::apsimx.options$exe.path)){
           warning(paste("Multiple versions of APSIM-X installed. \n
-                    Choosing the newest one:",newest.version))
+                    Choosing the newest one:", newest.version))
         }
         apsimx.name <- newest.version
       }else{
@@ -300,7 +340,6 @@ auto_detect_apsimx_examples <- function(){
       st1 <- "/Applications/"
       st3 <- "/Contents/Resources/Examples" 
       apsimx_ex_dir <- paste0(st1, apsimx.name, st3)
-      return(apsimx_ex_dir)
     }
   
     if(grepl("Linux", Sys.info()[["sysname"]])){
@@ -311,7 +350,7 @@ auto_detect_apsimx_examples <- function(){
       if(length(apsimx.versions) > 1){
         len.fa <- length(find.apsim)
         newest.version <- apsimx.versions[find.apsim]
-        if(apsimx.options$warn.versions){
+        if(apsimx.options$warn.versions && is.na(apsimx::apsimx.options$exe.path)){
           warning(paste("Multiple versions of APSIM-X installed. \n
                     Choosing the newest one:", newest.version))
         }
@@ -324,26 +363,12 @@ auto_detect_apsimx_examples <- function(){
   }
   
   if(.Platform$OS.type == "windows"){
-      st1 <- "C:/PROGRA~1"
-      laf <- list.files(st1)
-      find.apsim <- grep("APSIM", laf)
-      
-      if(length(find.apsim) == 0) stop("APSIM-X not found")
-      
-      apsimx.versions <- laf[find.apsim]
-      if(length(apsimx.versions) > 1){
-        newest.version <- laf[find.apsim][length(find.apsim)]
-        if(apsimx.options$warn.versions){
-          warning(paste("Multiple versions of APSIM-X installed. \n
-                        Choosing the newest one:", newest.version))
-        }
-        apsimx.name <- newest.version
-      }else{
-        apsimx.name <- apsimx.versions
-      }
+    ## Need to test this change
+      adax <- auto_detect_apsimx()
       ## APSIM path to examples
-      st3 <- "/Examples" 
-      apsimx_ex_dir <- paste0(st1, "/", apsimx.name, st3)
+      # st3 <- "/Examples" 
+      # apsimx_ex_dir <- paste0(st1, "/", apsimx.name, st3)
+      apsimx_ex_dir <- gsub("bin/Models.*", "Examples", adax)
   }
   
   if(!is.na(apsimx::apsimx.options$examples.path)){
@@ -461,8 +486,14 @@ read_apsimx <- function(file = "", src.dir = ".", value = "report", simplify = T
     
   if(length(report.names) == 1L){
     tbl0 <- DBI::dbGetQuery(con, paste("SELECT * FROM ", report.names))  
+    
+    if(nrow(tbl0) == 0)
+      warning("Report table has no data")
+    
     if(any(grepl("Clock.Today", names(tbl0)))){
-      tbl0$Date <- try(as.Date(sapply(tbl0$Clock.Today, function(x) strsplit(x, " ")[[1]][1])), silent = TRUE)
+      if(nrow(tbl0) > 0){
+        tbl0$Date <- try(as.Date(sapply(tbl0$Clock.Today, function(x) strsplit(x, " ")[[1]][1])), silent = TRUE)  
+      }
     }
   }
     
@@ -472,8 +503,14 @@ read_apsimx <- function(file = "", src.dir = ".", value = "report", simplify = T
       lst0 <- NULL
       for(i in seq_along(report.names)){
         tbl0 <- DBI::dbGetQuery(con, paste("SELECT * FROM ", report.names[i]))
+        
+        if(nrow(tbl0) == 0)
+          warning(paste("Report", report.names[i]), "has no data")
+        
         if(any(grepl("Clock.Today", names(tbl0)))){
-          tbl0$Date <- try(as.Date(sapply(tbl0$Clock.Today, function(x) strsplit(x, " ")[[1]][1])), silent = TRUE)
+          if(nrow(tbl0) > 0){
+            tbl0$Date <- try(as.Date(sapply(tbl0$Clock.Today, function(x) strsplit(x, " ")[[1]][1])), silent = TRUE)  
+          }
         }
         dat0 <- data.frame(report = report.names[i], tbl0)
         lst0 <- try(rbind(lst0, dat0), silent = TRUE)
@@ -502,6 +539,9 @@ read_apsimx <- function(file = "", src.dir = ".", value = "report", simplify = T
            call. = FALSE)
     }
     tbl0 <- DBI::dbGetQuery(con, paste("SELECT * FROM ", value))
+    if(any(grepl("Clock.Today", names(tbl0)))){
+      tbl0$Date <- try(as.Date(sapply(tbl0$Clock.Today, function(x) strsplit(x, " ")[[1]][1])), silent = TRUE)
+    }
   }
     
   if(value == "all"){
@@ -570,6 +610,9 @@ read_apsimx_all <- function(src.dir = ".", value = "report"){
 #' @name apsimx_options
 #' @description Set the path to the APSIM-X executable, examples and warning suppression. 
 #' @param exe.path path to apsim executable. White spaces are not allowed.
+#' @param dotnet logical indicating if APSIM should be run through the dotnet command
+#' @param mono logical indicating if the mono command should be used when running APSIM. This is for versions 
+#' for Mac/Linux older than Sept 2021. 
 #' @param examples.path path to apsim examples
 #' @param warn.versions logical. warning if multiple versions of APSIM-X are detected.
 #' @param warn.find.apsimx logical. By default a warning will be thrown if APSIM-X is not found. 
@@ -587,9 +630,15 @@ read_apsimx_all <- function(src.dir = ".", value = "report"){
 #' apsimx.options$exe.path
 #' }
 
-apsimx_options <- function(exe.path = NA, examples.path = NA, 
+apsimx_options <- function(exe.path = NA, dotnet = FALSE, mono = FALSE, examples.path = NA, 
                            warn.versions = TRUE, warn.find.apsimx = TRUE){
+  
+  if(dotnet && mono)
+    stop("either dotnet or mono should be TRUE, but not both", call. = TRUE)
+  
   assign('exe.path', exe.path, apsimx.options)
+  assign('dotnet', dotnet, apsimx.options)
+  assign('mono', mono, apsimx.options)
   assign('examples.path', examples.path, apsimx.options)
   assign('warn.versions', warn.versions, apsimx.options)
   assign('warn.find.apsimx', warn.find.apsimx, apsimx.options)
@@ -615,6 +664,8 @@ apsimx_options <- function(exe.path = NA, examples.path = NA,
 
 apsimx.options <- new.env(parent = emptyenv())
 assign('exe.path', NA, apsimx.options)
+assign('dotnet', FALSE, apsimx.options)
+assign('mono', FALSE, apsimx.options)
 assign('examples.path', NA, apsimx.options)
 assign('warn.versions', TRUE, apsimx.options)
 assign('warn.find.apsimx', TRUE, apsimx.options)
@@ -627,7 +678,7 @@ assign('.run.local.tests', FALSE, apsimx.options)
 #' @import DBI jsonlite knitr RSQLite xml2 
 #' @importFrom utils read.table write.table packageVersion
 #' @importFrom tools file_path_sans_ext
-#' @importFrom stats coef cor cov2cor deviance lm optim qt var sd setNames sigma anova
+#' @importFrom stats aggregate anova coef cor cov2cor deviance lm optim qt var sd setNames sigma 
 NULL
 
 utils::globalVariables(".data")

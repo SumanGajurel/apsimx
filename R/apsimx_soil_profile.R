@@ -35,6 +35,9 @@
 #' @param NO3N nitrate nitrogen (Chemical) (ppm)
 #' @param NH4N ammonium nitrogen (Chemical) (ppm)
 #' @param PH soil pH
+#' @param ParticleSizeClay particle size clay (in percent)
+#' @param ParticleSizeSilt particle size silt (in percent)
+#' @param ParticleSizeSand particle size sand (in percent)
 #' @param soil.bottom bottom of the soil profile (cm)
 #' @param water.table water table level (not used at the moment) (cm)
 #' @param soil.type might use it in the future for auto filling missing information
@@ -42,6 +45,7 @@
 #' @param metadata list with soil metadata. For possible parameters and values see an example of \code{\link{inspect_apsimx}} with soil.child = \dQuote{Metadata}.
 #' @param soilwat optional \sQuote{list} of class \sQuote{soilwat_parms}
 #' @param swim optional \sQuote{list} of class \sQuote{swim_parms}
+#' @param soilorganicmatter optional \sQuote{list} of class \sQuote{soilorganicmatter_parms}
 #' @param dist.parms parameter values for creating a profile. If a == 0 and b == 0 then \cr
 #' a constant value of 1 is used. If a == 0 and b != 0, then an exponential decay is used. \cr
 #' If a != 0 and b != 0 then the equation is \code{a*soil.layer*exp(-b*soil.layer)}.  
@@ -77,6 +81,9 @@ apsimx_soil_profile <-  function(nlayers = 10,
                                  NO3N = NULL,
                                  NH4N = NULL,
                                  PH = NULL,
+                                 ParticleSizeClay = NULL,
+                                 ParticleSizeSilt = NULL,
+                                 ParticleSizeSand = NULL,
                                  soil.bottom = 150,
                                  water.table = 200, 
                                  soil.type = 0,
@@ -84,6 +91,7 @@ apsimx_soil_profile <-  function(nlayers = 10,
                                  metadata = NULL,
                                  soilwat = NA,
                                  swim = NA,
+                                 soilorganicmatter = NA,
                                  dist.parms = list(a = 0, b = 0.2)){
 
   if(!is.null(Depth) & !is.null(Thickness)){
@@ -355,24 +363,56 @@ apsimx_soil_profile <-  function(nlayers = 10,
     PH <- PH.max * soil_variable_profile(nlayers, a = PH[[2]], b = PH[[3]])
   }
   
+  ## These are some values for a sandy clay loam
+  if(missing(ParticleSizeClay)){
+    ParticleSizeClay <- rep(25, nlayers)
+  }else{
+    if(length(ParticleSizeClay) != nlayers)
+      stop("ParticleSizeClay length should be equal to the number of layers", call. = FALSE)
+  }
+  
+  if(missing(ParticleSizeSilt)){
+    ParticleSizeSilt <- rep(15, nlayers)
+  }else{
+    if(length(ParticleSizeSilt) != nlayers)
+      stop("ParticleSizeSilt length should be equal to the number of layers", call. = FALSE)
+  }
+  
+  if(missing(ParticleSizeSand)){
+    ParticleSizeSand <- rep(60, nlayers)
+  }else{
+    if(length(ParticleSizeSand) != nlayers)
+      stop("ParticleSizeSand length should be equal to the number of layers", call. = FALSE)
+  }
+  
+  ## Build the crop soil
+  crop.soil <- as.data.frame(replicate(length(crops), do.call(cbind, list(crop.KL, crop.LL, crop.XF))))
+  names(crop.soil) <- as.vector(sapply(crops, function(x) paste0(x, c(".KL", ".LL", ".XF"))))
+    
   soil <- data.frame(Depth=Depth, Thickness=Thickness, BD=BD, 
                      AirDry=AirDry, LL15=LL15, DUL=DUL, SAT=SAT, 
-                     KS=KS, crop.XF=crop.XF, crop.KL = crop.KL,
-                     crop.LL = crop.LL, Carbon=Carbon, 
+                     KS=KS, Carbon=Carbon, 
                      SoilCNRatio=SoilCNRatio, FOM=FOM, 
                      FOM.CN=FOM.CN, FBiom=FBiom, FInert=FInert,
-                     NO3N=NO3N, NH4N=NH4N, PH=PH)
+                     NO3N=NO3N, NH4N=NH4N, PH=PH, 
+                     ParticleSizeClay = ParticleSizeClay,
+                     ParticleSizeSilt = ParticleSizeSilt,
+                     ParticleSizeSand = ParticleSizeSand)
   
     names(soil) <- c("Depth","Thickness", "BD", "AirDry","LL15",
-                     "DUL","SAT","KS","crop.XF","crop.KL","crop.LL",
-                     "Carbon","SoilCNRatio", "FOM","FOM.CN","FBiom","FInert",
-                     "NO3N","NH4N","PH")
+                     "DUL","SAT","KS", "Carbon","SoilCNRatio", "FOM",
+                     "FOM.CN","FBiom","FInert",
+                     "NO3N","NH4N","PH", "ParticleSizeClay", "ParticleSizeSilt",
+                     "ParticleSizeSand")
+    
+    soil <- cbind(soil, crop.soil)
+    
+    ans <- list(soil=soil, crops = crops, metadata = metadata, soilwat = soilwat, swim = swim, soilorganicmatter = soilorganicmatter)
+    class(ans) <- "soil_profile"
     
     ## Check for reasonable values
-    check_apsimx_soil_profile(soil)
+    check_apsimx_soil_profile(ans)
     
-    ans <- list(soil=soil, crops = crops, metadata = metadata, soilwat = soilwat, swim = swim)
-    class(ans) <- "soil_profile"
     return(ans)
   }
 
@@ -423,8 +463,7 @@ soil_variable_profile <- function(nlayers, a = 0.5, b = 0.5){
 #' @export 
 plot.soil_profile <- function(x,..., property = c("all", "water","BD",
                                               "AirDry","LL15","DUL","SAT",
-                                              "KS","crop.XF","crop.KL",
-                                              "crop.LL", "Carbon", "SoilCNRatio", 
+                                              "KS", "Carbon", "SoilCNRatio", 
                                               "FOM","FOM.CN","FBiom",
                                               "FInert","NO3N","NH4N","PH")){
   ## Test for existence of ggplot2
@@ -438,47 +477,91 @@ plot.soil_profile <- function(x,..., property = c("all", "water","BD",
   xsoil <- x$soil
   ## Add soil bottom depth
   xsoil$soil.depth.bottom <- sapply(as.character(xsoil$Depth), FUN = function(x) as.numeric(strsplit(x,"-")[[1]][2]))
-  property <- match.arg(property)
-  if(property != "all" & property != "water"){
+  
+  crops.property <- as.vector(sapply(x$crops, function(x) paste0(x, c(".XF", ".KL", ".LL"))))
+  
+  property.in.crops <- try(match.arg(property, choices = crops.property, several.ok = TRUE), silent = TRUE)
+  
+  properties <- c("all", "water","BD",
+                  "AirDry","LL15","DUL","SAT",
+                  "KS", "Carbon", "SoilCNRatio", 
+                  "FOM","FOM.CN","FBiom",
+                  "FInert","NO3N","NH4N","PH")
+    
+  if(inherits(property.in.crops, "try-error")){
+    property <- try(match.arg(property), silent = TRUE) 
+    if(inherits(property, "try-error")){
+      cat("property should be one of:", c(properties, crops.property), "\n")
+      stop("property does not match on of the possible properties", call. = FALSE)
+    }
+  }else{
+    property <- try(match.arg(property, choices = crops.property, several.ok = TRUE), silent = TRUE) 
+    if(inherits(property, "try-error")){
+      cat("Available crop properties", crops.property, "\n")
+      stop("Crop property is not in the possible list of crop properties", call. = FALSE)      
+    }
+  }
+
+  if(property != "all" && property != "water"){
     
     tmp <- xsoil[,c(property,"Depth","soil.depth.bottom")]
-    qp <- ggplot2::ggplot() + 
+    gp <- ggplot2::ggplot() + 
                    ggplot2::geom_point(ggplot2::aes(x = tmp[,1], y = -tmp[,3])) + 
                    ggplot2::geom_path(ggplot2::aes(x = tmp[,1], y = -tmp[,3])) +
                    ggplot2::xlab(property) + 
                    ggplot2::ylab("Soil Depth (cm)") 
-    print(qp)
+    print(gp)
   }
   
   if(property == "all"){
     
     tmp <- xsoil
+    ## Check if property is missing
+    tmp.nms0 <- names(tmp)
+    tmp.nms <- setdiff(tmp.nms0, c("Depth", "Thickness"))
+
+    dat0 <- NULL
+    for(i in tmp.nms){
+      tmp1 <- data.frame(var = i, dist = tmp[,i])
+      dat0 <- rbind(dat0, tmp1)
+    }
     ## This looks dumb, but I'd rather not need a new package for such a simple task
-    bd <- data.frame(var = "BD", dist = tmp[,"BD"]) # 1
-    ad <- data.frame(var = "AirDry", dist = tmp[,"AirDry"]) # 2
-    ll <- data.frame(var = "LL15", dist = tmp[,"LL15"]) # 3
-    dul <- data.frame(var = "DUL", dist = tmp[,"DUL"]) # 4
-    sat <- data.frame(var = "SAT", dist = tmp[,"SAT"]) # 5
-    ks <- data.frame(var = "KS", dist = tmp[,"KS"]) # 6
-    c.xf <- data.frame(var = "crop.XF", dist = tmp[,"crop.XF"]) # 7
-    c.kl <- data.frame(var = "crop.KL", dist = tmp[,"crop.KL"]) # 8
-    c.ll <- data.frame(var = "crop.LL", dist = tmp[,"crop.LL"]) # 9
-    carbon <- data.frame(var = "Carbon", dist = tmp[,"Carbon"]) # 10
-    soilcn <- data.frame(var = "SoilCNRatio", dist = tmp[,"SoilCNRatio"]) # 11
-    fom <- data.frame(var = "FOM", dist = tmp[,"FOM"]) # 12
-    fom.cn <- data.frame(var = "FOM.CN", dist = tmp[,"FOM.CN"]) # 13
-    fbiom <- data.frame(var = "FBiom", dist = tmp[,"FBiom"]) # 14
-    finert <- data.frame(var = "FInert", dist = tmp[,"FInert"]) # 15
-    no3n <- data.frame(var = "NO3N", dist = tmp[,"NO3N"]) # 16
-    nh4n <- data.frame(var = "NH4N", dist = tmp[,"NH4N"]) # 17
-    ph <- data.frame(var = "PH", dist = tmp[,"PH"]) # 18
+    # bd <- data.frame(var = "BD", dist = tmp[,"BD"]) # 1
+    # ad <- data.frame(var = "AirDry", dist = tmp[,"AirDry"]) # 2
+    # ll <- data.frame(var = "LL15", dist = tmp[,"LL15"]) # 3
+    # dul <- data.frame(var = "DUL", dist = tmp[,"DUL"]) # 4
+    # sat <- data.frame(var = "SAT", dist = tmp[,"SAT"]) # 5
+    # ks <- data.frame(var = "KS", dist = tmp[,"KS"]) # 6
+    # carbon <- data.frame(var = "Carbon", dist = tmp[,"Carbon"]) # 7
+    # soilcn <- data.frame(var = "SoilCNRatio", dist = tmp[,"SoilCNRatio"]) # 8
+    # fom <- data.frame(var = "FOM", dist = tmp[,"FOM"]) # 9
+    # fom.cn <- data.frame(var = "FOM.CN", dist = tmp[,"FOM.CN"]) # 10
+    # fbiom <- data.frame(var = "FBiom", dist = tmp[,"FBiom"]) # 11
+    # finert <- data.frame(var = "FInert", dist = tmp[,"FInert"]) # 12
+    # no3n <- data.frame(var = "NO3N", dist = tmp[,"NO3N"]) # 13
+    # nh4n <- data.frame(var = "NH4N", dist = tmp[,"NH4N"]) # 14
+    # ph <- data.frame(var = "PH", dist = tmp[,"PH"]) # 15
     
-    soil.depth.bottoms <- rep(xsoil$soil.depth.bottom, 18)
+    ## The code below is not needed
+    crops.xf <- NULL
+    crops.kl <- NULL
+    crops.ll <- NULL
+    num.crops <- length(x$crops)
+    num.crops.dats <- num.crops * 3
+    for(i in x$crops){
+      crops.xf <- rbind(crops.xf, data.frame(var = paste0(i, ".XF"), dist = tmp[,paste0(i, ".XF")]))
+      crops.kl <- rbind(crops.kl, data.frame(var = paste0(i, ".KL"), dist = tmp[,paste0(i, ".KL")])) 
+      crops.ll <- rbind(crops.ll, data.frame(var = paste0(i, ".LL"), dist = tmp[,paste0(i, ".LL")])) 
+    }
+
+    soil.depth.bottoms <- rep(xsoil$soil.depth.bottom, length(tmp.nms))
     
-    dat0 <- rbind(bd,ad,ll,dul,sat,ks,c.xf,c.kl,c.ll,carbon,
-                  soilcn,fom,fom.cn,fbiom,finert,no3n,nh4n,ph)
+    # dat0 <- rbind(bd, ad, ll, dul, sat, ks, carbon,
+    #               soilcn, fom, fom.cn, fbiom, finert, no3n, nh4n, ph,
+    #               crops.xf, crops.kl, crops.ll)
     
     dat <- data.frame(dat0, soil.depths = soil.depth.bottoms)
+    dat$soil.depth.bottom <- NULL
     
     gp <- ggplot2::ggplot(data = dat, ggplot2::aes(x = dist, y = -soil.depths)) +
       ggplot2::ylab("Soil Depth (cm)") + ggplot2::xlab("") + 
@@ -502,6 +585,7 @@ plot.soil_profile <- function(x,..., property = c("all", "water","BD",
               ggplot2::coord_flip()  
     print(gp)
   }
+  invisible(gp)
 }
 
 #' Check an apsimx soil profile
@@ -517,16 +601,21 @@ plot.soil_profile <- function(x,..., property = c("all", "water","BD",
 
 check_apsimx_soil_profile <- function(x){
   
+  if(!inherits(x, "soil_profile"))
+    stop("object should be of class 'soil_profile'", call. = FALSE)
+  
   if(inherits(x, "soil_profile")){
     soil <- x$soil
   }else{
     soil <- x
   } 
   
+  crop.vars <- as.vector(sapply(x$crops, function(x) paste0(x, c(".KL", ".LL", ".XF"))))
+  
   vars <- c("Depth","Thickness", "BD", "AirDry","LL15",
-            "DUL","SAT","KS","crop.XF","crop.KL","crop.LL",
+            "DUL","SAT","KS",
             "Carbon","SoilCNRatio", "FOM","FOM.CN","FBiom","FInert",
-            "NO3N","NH4N","PH")
+            "NO3N","NH4N","PH", crop.vars)
   
   soil.names <- names(soil)
   
@@ -556,15 +645,11 @@ check_apsimx_soil_profile <- function(x){
   if(max(soil$SAT) > 1) warning("SAT is too high")
   ## KS 
   if(min(soil$KS) <= 0) warning("KS is zero or negative")
-  ## crop.XF
-  if(min(soil$crop.XF) <= 0) warning("crop.XF is zero or negative")
-  if(max(soil$crop.XF) > 1) warning("crop.XF is too high")
-  ## crop.KL
-  if(min(soil$crop.KL) <= 0) warning("crop.KL is zero or negative")
-  if(max(soil$crop.KL) > 1) warning("crop.KL is too high")
-  ## crop.LL
-  if(min(soil$crop.LL) <= 0) warning("crop.LL is zero or negative")
-  if(max(soil$crop.LL) > 1) warning("crop.LL is too high")
+  ## crop.soil
+  for(i in seq_along(crop.vars)){
+    if(min(soil[[crop.vars[i]]]) < 0) warning(paste(crop.vars[i], "is negative"))
+    if(max(soil[[crop.vars[i]]]) > 1) warning(paste(crop.vars[i], "is greater than 1"))
+  }
   ## Carbon
   if(min(soil$Carbon) <= 0) warning("Carbon is zero or negative")
   ## SoilCNRatio
@@ -587,10 +672,29 @@ check_apsimx_soil_profile <- function(x){
   if(min(soil$PH) <= 0) warning("PH is zero or negative")
   if(max(soil$PH) > 14) warning("PH is too high")
   
+  ## Checking texture if it exists
+  if(!is.null(soil$Clay)){
+    if(any(soil$Clay > 100)) warning("Clay cannot be greater than 100")
+    if(any(soil$Clay < 0)) warning("Clay is negative")
+  }
+  
+  if(!is.null(soil$Silt)){
+    if(any(soil$Silt > 100)) warning("Silt cannot be greater than 100")
+    if(any(soil$Silt < 0)) warning("Silt is negative")
+  }
+  
+  if(!is.null(soil$Sand)){
+    if(any(soil$Sand > 100)) warning("Sand cannot be greater than 100")
+    if(any(soil$Sand < 0)) warning("Sand is negative")
+  }
+  
   SATminusDUL <- soil$SAT - soil$DUL
   DULminusLL <- soil$DUL - soil$LL
   DULminuscrop.LL <- soil$DUL - soil$crop.LL
   SATminusLL <- soil$SAT - soil$LL
+  LLminuscrop.LL <- soil$LL - soil$crop.LL
+  LLminusAirDry <- soil$LL - soil$AirDry
+  AirDryminuscrop.LL <- soil$AirDry - soil$crop.LL
   
   if(any(SATminusDUL <= 0))
     warning("DUL cannot be greater than SAT")
@@ -603,6 +707,477 @@ check_apsimx_soil_profile <- function(x){
 
   if(any(SATminusLL <= 0))
     warning("LL cannot be greater than SAT")
+  
+  if(any(LLminuscrop.LL < 0))
+    warning("crop.LL cannot be lower than soil LL")
+  
+  if(any(LLminusAirDry < 0))
+    warning("AirDry cannot be greater than LL")
+  
+  if(any(AirDryminuscrop.LL < 0))
+    warning("crop.LL cannot be lower than AirDry")
 
   return(invisible(x))
+}
+
+#' 
+#' @title Compare two or more soil profiles
+#' @name compare_apsim_soil_profile
+#' @rdname compare_apsim_soil_profile
+#' @description Helper function which allows for a simple comparison among soil_profile objects
+#' @param ... met file objects. Should be of class \sQuote{met}
+#' @param soil.var meteorological variable to use in the comparison. Either \sQuote{all},
+#' \sQuote{radn}, \sQuote{maxt}, \sQuote{mint}, \sQuote{rain}, \sQuote{rh}, 
+#' \sQuote{wind_speed} or \sQuote{vp}. 
+#' @param labels labels for plotting and identification of \sQuote{soil_profile} objects.
+#' @param check whether to check \sQuote{soil_profile} objects using \sQuote{check_apsimx_soil_profile}.
+#' @param verbose whether to print agreement values (default is FALSE).
+#' @note I have only tested this for 2 or 3 objects. The code is set up to be able to 
+#' compare more, but I'm not sure that would be all that useful.
+#' @export
+#' @return object of class \sQuote{soil_profile_mrg}, which can be used for further plotting
+#' @examples 
+#' \dontrun{
+#' require(soilDB)
+#' require(sp)
+#' require(sf)
+#' require(spData)
+#' # Get two soil profiles
+#' sp1 <- get_ssurgo_soil_profile(lonlat = c(-93, 42))
+#' sp2 <- get_ssurgo_soil_profile(lonlat = c(-92, 41))
+#' # Compare them
+#' cmp <- compare_apsim_soil_profile(sp1[[1]], sp2[[1]], labels = c("sp1", "sp2"))
+#' # Plot the variables
+#' plot(cmp)
+#' }
+#' 
+
+compare_apsim_soil_profile <- function(..., 
+                                       soil.var = c("all", "Thickness", 
+                                          "BD", "AirDry", "LL15", 
+                                          "DUL", "SAT", "KS", "Carbon", "SoilCNRatio",
+                                          "FOM", "FOM.CN", "FBiom", "FInert", "NO3N",
+                                          "NH4N", "PH"),
+                                      labels,
+                                      check = FALSE,
+                                      verbose = FALSE){
+  
+  soils <- list(...)
+  
+  n.soils <- length(soils)
+  
+  soil.var <- match.arg(soil.var)
+  
+  if(n.soils < 2) stop("you should provide at least two soil_profiles", call. = FALSE)
+  
+  soil1 <- soils[[1]]
+  
+  m.nms <- NULL
+  if(!missing(labels)){
+    m.nms <- labels
+    if(length(labels) != n.soils)
+      stop(" 'labels' length should be the same as the number of 'soil_profile' objects", call. = FALSE)
+  } 
+  
+  if(!inherits(soil1, "soil_profile")) stop("object should be of class 'soil_profile' ", call. = FALSE)
+  
+  ## Check for any issues
+  if(check) check_apsimx_soil_profile(soil1$soil)
+  
+  ## Should have the same number of layers
+  soil.mrg <- soil1$soil
+  names(soil.mrg) <- paste0(names(soil.mrg), ".1")  
+  soil1 <- soil1$soil
+  nms1 <- names(soil1)
+  
+  for(i in 2:n.soils){
+    
+    if(check) check_apsimx_soil_profile(soils[[i]])
+    
+    soil.i <- soils[[i]]$soil
+    
+    if(nrow(soil1) != nrow(soil.i)) stop("soil profiles should have the same number of rows", call. = FALSE)
+    
+    if(ncol(soil1) != ncol(soil.i) || length(setdiff(names(soil1), names(soil.i))) > 0){
+      warning("Number of columns is not the same for the soil profiles. Selecting the ones in common.")
+      common.names <- intersect(names(soil1), names(soil.i))
+      soil1 <- subset(soil1, select = common.names)
+      soil.i <- subset(soil.i, select = common.names)
+    }
+  
+    names(soil1) <- paste0(names(soil1), ".1")  
+    names(soil.i) <- paste0(names(soil.i), ".", i)
+    ## drop the year.i and day.i names
+    soil.mrg <- cbind(soil.mrg, soil.i)
+  }
+  
+  if(soil.var == "all"){
+    ans <- data.frame(variable = setdiff(names(soil1), c("Depth")),
+                      vs = NA, labels = NA,
+                      bias = NA, slope = NA, corr = NA)
+    if(missing(labels)) ans$labels <- NULL
+  }else{
+    ans <- data.frame(variable = soil.var,
+                      vs = NA, labels = NA,
+                      bias = NA, slope = NA, corr = NA)
+    if(missing(labels)) ans$labels <- NULL
+  }
+  
+  ## Calculate bias for all variables
+  if(soil.var == "all"){
+    soil.var.sel <- nms1[!(nms1 %in% c("Depth"))]
+    gvar.sel <- paste0(soil.var.sel, collapse = "|")
+    idx.soil.mrg <- grep(gvar.sel, names(soil.mrg))
+    soil.mrg.s <- soil.mrg[,idx.soil.mrg]
+    
+    k <- 1  
+    ## Compute Bias matrix
+    for(i in soil.var.sel){
+      if(verbose) cat("Variable ", i, "\n")
+      ans$variable[k] <- i
+      tmp <- soil.mrg.s[, grep(i, names(soil.mrg.s))]
+      if(ncol(tmp) > 2){
+        if(i == "FOM"){
+          tmp <- soil.mrg.s[, grep("FOM.[1-9]", names(soil.mrg.s))]    
+        }else{
+          tmp <- soil.mrg.s[, grep("FOM.CN", names(soil.mrg.s))]   
+        }
+      }
+      if(ncol(tmp) < 2) stop("merged selected variables should be at least of length 2", call. = FALSE)
+      
+      for(j in 2:ncol(tmp)){
+        if(verbose) cat(names(tmp)[j - 1], " vs. ", names(tmp)[j], "\n")
+        ans$vs[k] <- paste(names(tmp)[j - 1], "vs.", names(tmp)[j])
+        if(!missing(labels)){
+          if(verbose) cat("labels", labels[j - 1], " vs. ", labels[j], "\n")
+          ans$labels[k] <- paste(labels[j - 1], "vs.", labels[j])
+        } 
+        if(abs(sum(tmp[, j - 1] - tmp[, j])) < 0.0001){
+          if(verbose) cat(paste("Variable", i, "appears identical \n"))
+          ans$bias[k] <- NA
+          ans$slope[k] <- NA
+          ans$corr[k] <- NA
+          ans$rss[k] <- NA
+          ans$rmse[k] <- NA
+          next
+        }
+          
+        fm0 <- lm(tmp[, j - 1] ~ tmp[, j])
+        if(verbose) cat(" \t Bias: ", coef(fm0)[1], "\n")
+        ans$bias[k] <- coef(fm0)[1]
+        if(verbose) cat(" \t Slope: ", coef(fm0)[2], "\n")
+        ans$slope[k] <- coef(fm0)[2]
+        if(verbose) cat(" \t Corr: ", cor(tmp[,j - 1], tmp[, j]), "\n")
+        ans$corr[k] <- cor(tmp[,j - 1], tmp[, j])
+        if(verbose) cat(" \t RSS: ", deviance(fm0), "\n")
+        ans$rss[k] <- deviance(fm0)
+        if(verbose) cat(" \t RMSE: ", sigma(fm0), "\n")
+        ans$rmse[k] <- sigma(fm0)
+      }
+      k <- k + 1
+    }
+  }
+  
+  if(soil.var != "all"){
+    ## Just select the appropriate variable
+    idx.soil.mrg <- grep(soil.var, names(soil.mrg))
+    soil.mrg.s <- soil.mrg[,idx.soil.mrg]
+    
+    if(verbose) cat("Variable ", soil.var, "\n")
+    ans$variable[1] <- soil.var
+    
+    tmp <- soil.mrg.s
+    for(j in 2:ncol(tmp)){
+      if(verbose) cat(names(tmp)[j - 1], " vs. ", names(tmp)[j], "\n")
+      ans$vs[1] <- paste(names(tmp)[j - 1], "vs.", names(tmp)[j])
+      if(!missing(labels)){
+        if(verbose) cat("labels", labels[j - 1], " vs. ", labels[j], "\n")
+        ans$labels[1] <- paste(labels[j - 1], "vs.", labels[j])
+      }
+      fm0 <- lm(tmp[, j - 1] ~ tmp[, j])
+      if(verbose) cat(" \t Bias: ", coef(fm0)[1], "\n")
+      ans$bias[1] <- coef(fm0)[1]
+      if(verbose) cat(" \t Slope: ", coef(fm0)[2], "\n")
+      ans$slope[1] <- coef(fm0)[2]
+      if(verbose) cat(" \t Corr: ", cor(tmp[,j - 1], tmp[, j]), "\n")
+      ans$corr[1] <- cor(tmp[,j - 1], tmp[, j])
+      if(verbose) cat(" \t RSS: ", deviance(fm0), "\n")
+      ans$rss[1] <- deviance(fm0)
+      if(verbose) cat(" \t RMSE: ", sigma(fm0), "\n")
+      ans$rmse <- sigma(fm0)
+    }
+  }
+  
+  attr(soil.mrg, "soil.names") <- m.nms
+  attr(soil.mrg, "length.soils") <- n.soils  
+  soil.mrg <- structure(list(soil.mrg = soil.mrg, index.table = ans),
+                       class = "soil_profile_mrg")
+  invisible(soil.mrg)
+}
+
+#' print method for soil_profile_mrg
+#' Only variables which are not identical will be printed
+#' @rdname compare_apsim_soil_profile
+#' @description print method for \sQuote{soil_profile_mrg}
+#' @param x object of class \sQuote{soil_profile_mrg}
+#' @param ... additional arguments passed to print
+#' @param digits number of digits to print (default is 2)
+#' @return a table with indexes for the soil profiles
+#' @export
+print.soil_profile_mrg <- function(x, ..., digits = 2){
+  print(x$index.table[!is.na(x$index.table$bias),], digits = digits)
+}
+
+#' Plotting function for comparing soil profiles
+#' @rdname compare_apsim_soil_profile
+#' @description plotting function for compare_apsim_soil_profile, it requires ggplot2
+#' @param x object of class \sQuote{soil_profile_mrg}
+#' @param ... \sQuote{soil_profile} objects. Should be of class \sQuote{soil_profile}
+#' @param plot.type either \sQuote{depth}, \sQuote{vs}, \sQuote{diff} or \sQuote{density}
+#' @param pairs pair of objects to compare, defaults to 1 and 2 but others are possible
+#' @param soil.var soil variable to plot 
+#' @param span argument to be passed to \sQuote{geom_smooth}
+#' @return it produces a plot
+#' @export
+#' 
+plot.soil_profile_mrg <- function(x, ..., plot.type = c("depth", "vs", "diff", "density"),
+                         pairs = c(1, 2),
+                         soil.var = c("all", "Thickness", 
+                                      "BD", "AirDry", "LL15", 
+                                      "DUL", "SAT", "KS", "Carbon", "SoilCNRatio",
+                                      "FOM", "FOM.CN", "FBiom", "FInert", "NO3N",
+                                      "NH4N", "PH"),
+                         span = 0.75){
+  
+  if(!requireNamespace("ggplot2", quietly = TRUE)){
+    warning("ggplot2 is required for this plotting function")
+    return(NULL)
+  }
+  
+  if(plot.type != "depth" && soil.var == "all")
+    stop("Please select a soil variable for this type of plot", call. = FALSE)
+  
+  x <- x$soil.mrg
+  
+  value <- NULL; depth <- NULL; soil <- NULL
+  
+  m.nms <- attr(x, "soil.names")
+  if(max(pairs) > attr(x, "length.soils")) stop("pairs index larger than length of soils")
+  
+  plot.type <- match.arg(plot.type)
+  soil.var <- match.arg(soil.var)
+  
+  if(soil.var == "all"){
+    num.vars <- length(grep(".1", names(x), fixed = TRUE))
+    num.soils <- attr(x, "length.soils")
+    soil.labels <- attr(x, "soil.names")
+    tmp <- NULL
+    for(i in seq_len(num.soils)){
+      wch.col <- grep(paste0(".", i), names(x), fixed = TRUE)
+      if(length(wch.col) != num.vars)
+        stop("Could not merge soil profiles", call. = FALSE)
+      tmp0 <- x[,wch.col]
+      names(tmp0) <- gsub(paste0(".", i), "", names(tmp0), fixed = TRUE)
+      tmp1 <- data.frame(soil = soil.labels[i], tmp0)
+      ## Insert depth variable
+      tmp1$depth[1] <- tmp1$Thickness[1] / 2
+      tmp1$cum.thickness <- cumsum(tmp1$Thickness)
+      for(i in 2:nrow(tmp1)){
+        tmp1$depth[i] <- tmp1$cum.thickness[i - 1] + tmp1$Thickness[i] / 2
+      }      
+      tmp1$Depth <- NULL
+      tmp2 <- NULL
+      vars <- setdiff(names(tmp1), c("soil", "Thickness"))
+      for(j in seq_along(vars)){
+        tmp2 <- rbind(tmp2, data.frame(soil = tmp1[["soil"]], depth = tmp1$depth, 
+                                       variable = vars[j], value = tmp1[[vars[j]]]))
+      }
+      tmp <- rbind(tmp, tmp2)
+    }
+    tmp.o <- tmp[order(tmp$soil, tmp$variable, tmp$depth),]
+    tmp3 <- tmp.o[!tmp.o$variable %in% c("depth", "cum.thickness"),]
+
+    gp1 <- ggplot2::ggplot(data = tmp3, ggplot2::aes(x = value, y = depth * 0.1, color = soil)) + 
+      ggplot2::facet_wrap(~ variable, scales = "free") + 
+      ggplot2::geom_point() + 
+      ggplot2::geom_path() + 
+      ggplot2::scale_y_reverse() + 
+      ggplot2::ylab("Depth (cm)") 
+    print(gp1)
+  }
+  
+  if(plot.type == "vs" && soil.var != "all"){
+    tmp <- x[, grep(soil.var, names(x))]
+    prs <- paste0(soil.var, ".", pairs)
+    gp1 <- ggplot2::ggplot(data = tmp, ggplot2::aes(x = eval(parse(text = eval(prs[1]))), 
+                                                    y = eval(parse(text = eval(prs[2]))))) +
+      ggplot2::geom_point() + 
+      ggplot2::xlab(paste(m.nms[pairs[1]], prs[1])) + 
+      ggplot2::ylab(paste(m.nms[pairs[2]], prs[2])) + 
+      ggplot2::geom_smooth(method = "lm") + 
+      ggplot2::geom_abline(intercept = 0, slope = 1, color = "orange")
+    
+    print(gp1)
+  }
+  
+  if(plot.type == "diff" && soil.var != "all"){
+    
+    prs0 <- paste0(soil.var, ".", pairs)
+    prs <- paste0(prs0, collapse = "|")
+    tmp <- x[, grep(prs, names(x))]
+    
+    ## x Variable is prs[1]
+    ## y Variable is prs[2] - prs[1]
+    dff <- tmp[,prs0[2]] - tmp[,prs0[1]]
+    
+    gp1 <- ggplot2::ggplot(data = tmp, ggplot2::aes(x = eval(parse(text = eval(prs0[1]))), 
+                                                    y = dff)) +
+      ggplot2::geom_point() + 
+      ggplot2::xlab(paste(m.nms[pairs[1]], prs0[1])) + 
+      ggplot2::ylab(paste("Difference", prs0[2], "-", prs0[1])) + 
+      ggplot2::geom_smooth(method = "lm", ...) + 
+      ggplot2::geom_hline(yintercept = 0, color = "orange")
+    
+    print(gp1)   
+  }
+  
+  if(plot.type == "depth" && soil.var != "all"){
+    
+    prs0 <- paste0(soil.var, ".", pairs)
+    prs <- paste0(prs0, collapse = "|")
+    x$depth[1] <- x$Thickness.1[1] / 2
+    x$cum.thickness <- cumsum(x$Thickness.1)
+    for(i in 2:nrow(x)){
+      x$depth[i] <- x$cum.thickness[i - 1] + x$Thickness.1[i] / 2
+    } 
+    tmp <- x[, grep(prs, names(x))]
+    tmp$Depth <- x$depth * 0.1
+
+    gp1 <- ggplot2::ggplot(data = tmp, ggplot2::aes(y = .data[["Depth"]], 
+                                                    x = eval(parse(text = eval(prs0[1]))),
+                                                    color = paste(m.nms[pairs[1]], prs0[1]))) +
+      
+      ggplot2::geom_point() + 
+      ggplot2::geom_path() + 
+      ggplot2::geom_point(ggplot2::aes(x = eval(parse(text = eval(prs0[2]))),
+                                       color = paste(m.nms[pairs[2]], prs0[2]))) + 
+      ggplot2::geom_path(ggplot2::aes(x = eval(parse(text = eval(prs0[2]))),
+                                       color = paste(m.nms[pairs[2]], prs0[2]))) + 
+      ggplot2::ylab("Depth (cm)") + 
+      ggplot2::xlab(soil.var) + 
+      ggplot2::scale_y_reverse() + 
+      ggplot2::theme(legend.title = ggplot2::element_blank())
+    
+    print(gp1)   
+  }
+  
+  if(plot.type == "density" && soil.var != "all"){
+    
+    prs0 <- paste0(soil.var, ".", pairs)
+    prs <- paste0(prs0, collapse = "|")
+    tmp <- x[, grep(prs, names(x))]
+    
+    gp1 <- ggplot2::ggplot(data = tmp, ggplot2::aes(x = eval(parse(text = eval(prs0[1]))),
+                                                    color = paste(m.nms[pairs[1]], prs0[1]))) + 
+      ggplot2::geom_density() + 
+      ggplot2::geom_density(ggplot2::aes(x = eval(parse(text = eval(prs0[2]))),
+                                         color = paste(m.nms[pairs[2]], prs0[2]))) +
+      ggplot2::xlab(soil.var) + 
+      ggplot2::theme(legend.title = ggplot2::element_blank())
+    
+    print(gp1)
+  }
+  invisible(gp1)
+}
+
+#' Function to calculate carbon stocks. The output units depend on the choice of area.
+#' If \sQuote{m2} is used, then the output units will be \sQuote{kg/m2}. If the \sQuote{area}
+#' is \sQuote{ha}, then the output units will be \sQuote{Mg/ha}.
+#' 
+#' @title Calculate soil carbon stocks
+#' @description Calculation of carbon stocks based on an object of class \sQuote{soil_profile}
+#' @name carbon_stocks
+#' @param x object of class \sQuote{soil_profile}
+#' @param depth soil depth (in meters). If missing then the whole soil profile is used.
+#' @param area either \sQuote{m2} meter squared or \sQuote{ha}.
+#' @param method interpolation method. Either \sQuote{linear} or \sQuote{constant}.
+#' @param ... additional arguments passed to internal functions (none used at the moment).
+#' @return returns a value with attribute \sQuote{units} and \sQuote{depth}
+#' @export
+#' @examples 
+#' \dontrun{
+#' sp <- apsimx_soil_profile()
+#' carbon_stocks(sp)
+#' carbon_stocks(sp, depth = 0.1)
+#' carbon_stocks(sp, depth = 0.2)
+#' carbon_stocks(sp, depth = 0.3)
+#' carbon_stocks(sp, depth = 0.4)
+#' }
+
+carbon_stocks <- function(x, depth, area = c("m2", "ha"), method = c("linear", "constant"), ...){
+  
+  if(!inherits(x, "soil_profile")){
+    stop("This function is intended to be used with an object of class 'soil_profile'", call. = FALSE)
+  }
+  
+  bottom <- sum(x$soil$Thickness) * 1e-3 ## Thickness is in mm, so after conversion this is in meters
+  
+  if(!missing(depth)){
+    if(depth <= 0) stop("'depth' should be a positive number", call. = FALSE)
+    if(depth > bottom) stop("'depth' should be a lower number than the bottom of the soil profile ", call. = FALSE)
+    if(depth > 10){
+      warning("'depth' should be in meters and the value entered is larger than 10. Is this correct?")
+    }
+  }
+  
+  area <- match.arg(area)
+  method <- match.arg(method)
+  
+  ## Compute carbon for the whole profile
+  if(missing(depth)){
+    weights <- x$soil$Thickness / sum(x$soil$Thickness)
+    ### Total volume is equal to 'bottom' (m^3)
+    ## Original BD (from APSIM) is reported in g/cc, which needs to be multipled by 1e3 to get kg/m^3
+    ## Carbon is in percent so it needs to be divided by 100 to get it as a proportion.
+    weighted.carbon <- sum(x$soil$Carbon * 1e-2 * weights * x$soil$BD * 1e3) 
+    total.carbon <- weighted.carbon * bottom
+    depth <- bottom
+  }else{
+    ## If depth only includes the first layer
+    if(depth <= x$soil$Thickness[1] * 1e-3){
+      first.layer.carbon <- x$soil$Carbon[1] * 1e-2 * x$soil$BD[1] * 1e3
+      total.carbon <- first.layer.carbon * depth
+    }else{
+      total.carbon <- 0
+      cum.thick <- cumsum(x$soil$Thickness) * 1e-3 ## Cumulative thickness in meters
+      for(i in 1:nrow(x$soil)){
+        ## If the desired depth is greater than the current depth
+        ## then add the soil carbon as it is
+        if(depth >= cum.thick[i]){ 
+          layer.carbon <- x$soil$Carbon[i] * 1e-2 * (x$soil$BD[i] * 1e3) * (x$soil$Thickness[i] * 1e-3)
+          total.carbon <- total.carbon + layer.carbon
+        }else{
+         ## In this case, we need to interpolate 
+          crbn <- x$soil$Carbon
+          bds <- x$soil$BD
+          dat <- data.frame(depth = cum.thick, carbon = crbn, bd = bds)
+          tmp.c <- stats::approx(dat$depth, y = dat$carbon, xout = depth, method = method)
+          tmp.bd <- stats::approx(dat$depth, y = dat$bd, xout = depth, method = method)  
+          layer.carbon <- tmp.c$y * 1e-2 * (tmp.bd$y * 1e3) * (depth - cum.thick[i - 1])
+          total.carbon <- total.carbon + layer.carbon
+          break
+        }
+      }
+    }
+  }
+
+  if(area == "ha"){
+    ans <- total.carbon * 1e4 * 1e-3 ## 1e4 converts from m2 to ha. 1e3 converts from kg to Mg
+    attr(ans, "units") <- "Mg/ha"
+  }else{
+    ans <- total.carbon
+    attr(ans, "units") <- "kg/m2"
+  }
+  attr(ans, "depth (m)") <- depth 
+  return(ans)
 }

@@ -48,6 +48,10 @@ a list with soil profile matrices with length equal to nsoil
 Utility function to convert \acronym{SSURGO} data to soil profile
 }
 \details{
+Some of the conversions use pedotrasnfer equations from Saxton and Rawls.
+ Soil Water Characteristic Estimates by Texture and Organic Matter for Hydrologic Solutions.
+ Soil Sci. Soc. Am. J. 70:1569–1578 (2006).
+
 Download the data from \acronym{SSURGO} using the \sQuote{FedData} package \cr
 This will generate csv files \sQuote{chorizon}, \sQuote{component} and \sQuote{mapunit}, \cr
 but also many other files which are not needed for creating a soil profile.
@@ -115,7 +119,7 @@ metadata$names <- NULL; metadata$class <- NULL; metadata$row.names <- NULL
 
 ## Convert to an APSIM soil profile
 asp2.c <- apsimx_soil_profile(nlayers = 10,
-                              Thickness = sp2.c[[1]]$Thickness,
+                              Thickness = sp2.c[[1]]$Thickness * 10,
                               BD = sp2.c[[1]]$BD,
                               AirDry = sp2.c[[1]]$AirDry,
                               LL15 = sp2.c[[1]]$LL15,
@@ -124,6 +128,9 @@ asp2.c <- apsimx_soil_profile(nlayers = 10,
                               KS = sp2.c[[1]]$KS,
                               Carbon = sp2.c[[1]]$Carbon,
                               PH = sp2.c[[1]]$PH,
+                              ParticleSizeClay = sp2.c[[1]]$ParticleSizeClay,
+                              ParticleSizeSilt = sp2.c[[1]]$ParticleSizeSilt,
+                              ParticleSizeSand = sp2.c[[1]]$ParticleSizeSand,
                               metadata = metadata)
                               
 plot(asp2.c)

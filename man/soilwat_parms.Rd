@@ -18,10 +18,11 @@ soilwat_parms(
   CNRed = NA,
   CNCov = NA,
   Slope = NA,
-  Discharge = NA,
+  DischargeWidth = NA,
   CatchmentArea = NA,
   MaxPond = NA,
-  SWCON = NA
+  SWCON = NA,
+  Thickness = NA
 )
 }
 \arguments{
@@ -51,13 +52,15 @@ soilwat_parms(
 
 \item{Slope}{see APSIM documentation}
 
-\item{Discharge}{see APSIM documentation}
+\item{DischargeWidth}{see APSIM documentation}
 
 \item{CatchmentArea}{see APSIM documentation}
 
 \item{MaxPond}{see APSIM documentation}
 
 \item{SWCON}{see APSIM documentation}
+
+\item{Thickness}{provide the corresponding thickness layer}
 }
 \value{
 a \sQuote{list} with class \sQuote{soilwat_parms}

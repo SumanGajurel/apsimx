@@ -2,6 +2,7 @@
 % Please edit documentation in R/compare_apsim_met.R
 \name{compare_apsim_met}
 \alias{compare_apsim_met}
+\alias{print.met_mrg}
 \alias{plot.met_mrg}
 \title{Compare two or more metfiles}
 \usage{
@@ -9,8 +10,11 @@ compare_apsim_met(
   ...,
   met.var = c("all", "radn", "maxt", "mint", "rain", "rh", "wind_speed", "vp"),
   labels,
-  check = FALSE
+  check = FALSE,
+  verbose = FALSE
 )
+
+\method{print}{met_mrg}(x, ..., digits = 2)
 
 \method{plot}{met_mrg}(
   x,
@@ -30,9 +34,13 @@ compare_apsim_met(
 
 \item{labels}{labels for plotting and identification of \sQuote{met} objects.}
 
-\item{check}{whether to check met files using \sQuote{check_apsim_met}.}
+\item{check}{whether to check \sQuote{met} objects using \sQuote{check_apsim_met}.}
+
+\item{verbose}{whether to print agreement stats to console (default is FALSE).}
 
 \item{x}{object of class \sQuote{met_mrg}}
+
+\item{digits}{digits to print (default is 2)}
 
 \item{plot.type}{either \sQuote{vs}, \sQuote{diff}, \sQuote{ts} - for time series or \sQuote{density}}
 
@@ -45,12 +53,16 @@ compare_apsim_met(
 \item{span}{argument to be passed to \sQuote{geom_smooth}}
 }
 \value{
-object of class \sQuote{cmet}, which can be used for further plotting
+object of class \sQuote{met_mrg}, which can be used for further plotting
+
+it prints the index.table data.frame
 
 it produces a plot
 }
 \description{
-Helper function which allows for a simple comparison among help files
+Helper function which allows for a simple comparison among \sQuote{met} objects
+
+print method for \sQuote{met_mrg}
 
 plotting function for compare_apsim_met, it requires ggplot2
 }

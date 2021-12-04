@@ -4,7 +4,7 @@
 \alias{unit_conv}
 \title{performs common unit conversions}
 \usage{
-unit_conv(x, from, to)
+unit_conv(x, from, to, ...)
 }
 \arguments{
 \item{x}{input variable}
@@ -12,13 +12,14 @@ unit_conv(x, from, to)
 \item{from}{original units}
 
 \item{to}{target units}
+
+\item{...}{additional arguments passed to specific conversions}
 }
 \value{
 value of the input variable with new units
 }
 \description{
-It does not do much at the moment, but I will develop it as I have 
-increasing needs for unit conversions.
+This function is slowly getting better. Adding more unit conversions as I need them.
 }
 \details{
 Function which performs common unit conversions
@@ -44,6 +45,12 @@ At the moment possible conversions are:
 \item \sQuote{g/m2} to \sQuote{soy bu/ac}
 \item \sQuote{mm} to \sQuote{inches}
 \item \sQuote{inches} to \sQuote{mm}
+\item \sQuote{lb/ac} to \sQuote{kg/ha}
+\item \sQuote{kg/ha} to \sQuote{lb/ac}
+\item \sQuote{lb/ac} to \sQuote{g/m2}
+\item \sQuote{g/m2} to \sQuote{lb/ac}
+\item \sQuote{decimal} to \sQuote{degrees}
+\item \sQuote{degrees} to \sQuote{decimal}
 
 }
 
@@ -55,6 +62,11 @@ Source: https://www.extension.iastate.edu/agdm/wholefarm/html/c6-80.html
 grain.yield.gm2 <- 600
 grain.yield.kgha <- unit_conv(grain.yield.gm2, from = "g/m2", to = "kg/ha")
 grain.yield.kgha
+## Converting coordinates
+require(sp)
+unit_conv("42d 0' 0\" N", from = "degrees", to = "decimal")
+unit_conv(42, from = "decimal", to = "degrees") ## EW by default
+unit_conv(42, from = "decimal", to = "degrees", NS = TRUE)
 }
 
 }

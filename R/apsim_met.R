@@ -324,11 +324,15 @@ impute_apsim_met <- function(met, method = c("approx","spline","mean"), verbose 
 #' 
 check_apsim_met <- function(met){
   
-  if(!inherits(met, "met")) stop("object should be of class 'met'")
+  if(!inherits(met, "met")) 
+    stop("object should be of class 'met'", call. = FALSE)
   
-  if(nrow(met) == 0){
-    stop("No rows of data present in this object.")
-  }
+  if(nrow(met) == 0)
+    stop("No rows of data present in this object.", call. = FALSE)
+
+  
+  if(length(colnames(met)) != length(attr(met, "colnames")))
+    stop("Length of column names does not match the length of 'colnames' in the attributes", call. = FALSE)
   
   col.names <- attr(met, "colnames")
   
@@ -406,6 +410,7 @@ check_apsim_met <- function(met){
   }
   ## Make sure that maxt is always higher or equal to mint
   temp.diff <- met[["maxt"]] - met[["mint"]]
+  temp.diff <- temp.diff[!is.na(temp.diff)] ## Just look at data which is not NA
   if(any(temp.diff < 0)){
     print(met[which(temp.diff < 0),])
     warning("Minimum temperature is greater than maximum temperature")
@@ -476,6 +481,7 @@ napad_apsim_met <- function(met){
     namet <- data.frame(date = dates)
     
     ## Create date column for merging
+    met <- as.data.frame(met)
     met$date <- as.Date(paste0(met$year, "-", met$day), format = "%Y-%j")
 
     ans <- merge(namet, met, by = "date", all.x = TRUE)
@@ -491,7 +497,8 @@ napad_apsim_met <- function(met){
                         amp = attr(met, "amp"),
                         colnames = attr(met, "colnames"),
                         units = attr(met, "units"),
-                        comments = attr(met, "comments"))
+                        comments = attr(met, "comments"),
+                        check = FALSE)
   }  
   
   fix2 <- FALSE
@@ -506,7 +513,6 @@ napad_apsim_met <- function(met){
                            day = 366,
                            fill.dat[, -c(1:2)])
     ans <- rbind(met, fill.row)
-    ans$date <- NULL
     fix2 <- TRUE
   }
   
@@ -581,10 +587,10 @@ as_apsim_met <- function(x,
                          check = TRUE){
   
   if(!inherits(x, "data.frame"))
-    stop("Object should be of class data.frame")
+    stop("Object should be of class data.frame", call. = FALSE)
 
   if(ncol(x) != 6 && length(colnames) == 6)
-    stop("If number of columns is not 6 then provide column names")
+    stop("If number of columns is not 6 then provide column names", call. = FALSE)
   
   names(x) <- colnames
   
@@ -691,9 +697,9 @@ tt_apsim_met <- function(met, dates,
                                  to = end.date, 
                                  by = "day"), index = 0)
   
-  if("Classic_TT" %in% method) met$Classic_TT <- 0
-  if("HeatStress_TT" %in% method) met$HeatStress_TT <- 0
-  if("CropHeatUnit_TT" %in% method) met$CropHeatUnit_TT <- 0
+  if("Classic_TT" %in% method) met <- add_column_apsim_met(met, 0, "Classic_TT", units = "(Cd)")
+  if("HeatStress_TT" %in% method) met <- add_column_apsim_met(met, 0, "HeatStress_TT", units = "(Cd)")
+  if("CropHeatUnit_TT" %in% method) met <- add_column_apsim_met(met, 0, "CropHeatUnit_TT", units = "(Cd)")
   # if("APSIM_TT" %in% method) met$APSIM_TT <- 0
   if("APSIM_TT" %in% method) stop("Not implemented yet.", call. = FALSE)
   
@@ -773,7 +779,7 @@ tt_apsim_met <- function(met, dates,
     }
   }
 
-  met$Date <- tmpd$Dates
+  met <- add_column_apsim_met(met, tmpd$Dates, "Dates", units = "()")
   return(met)
 }
   
@@ -940,12 +946,19 @@ apsim_tt <- function(maxt, mint, Tb=10, To=30, cardinal.temps, gdd.coord){
 }
 
 ## Function to include the photoperiod in an APSIM met file
-pp_apsim_met <- function(metfile, sun_angle=0){
+pp_apsim_met <- function(metfile, lat, sun_angle=0){
   
   if(!inherits(metfile, "met"))
     stop("Object 'metfile' should be of class 'met'", call. = FALSE)
-  lat0 <-  attr(metfile, "latitude") # read latitude from the Measured file
-  lat <- as.numeric(strsplit(lat0, "=")[[1]][2])
+  if(missing(lat)){
+    lat0 <-  attr(metfile, "latitude") # read latitude from the Measured file
+    lat <- suppressWarnings(as.numeric(strsplit(lat0, "=")[[1]][2]))
+    if(is.na(lat)){
+      lat00 <- strsplit(lat0, "=")[[1]][2]
+      lat0 <- suppressWarnings(as.numeric(strsplit(lat00, " ")[[1]]))
+      lat <- lat0[!is.na(lat0)]
+    }    
+  }
   day <-  metfile$day                  # read day from the Met file 
   
   aeqnox <- 79.25              
@@ -968,7 +981,8 @@ pp_apsim_met <- function(metfile, sun_angle=0){
   coshra  <- pmin(pmax(coshra1, -1.0), 1.0)
   hrangl  <- acos (coshra)
   PP      <- hrangl * rdn2hr * 2.0          
-  metfile$photoperiod <- PP
+  ##metfile$photoperiod <- PP
+  metfile <- add_column_apsim_met(metfile, PP, "photoperiod", units = "(hour)")
   return(metfile)
 }
 
@@ -1002,6 +1016,10 @@ pp_apsim_met <- function(metfile, sun_angle=0){
 #' ## for rain
 #' plot(ames, met.var = "rain", years = 2012:2015, cumulative = TRUE)
 #' plot(ames, met.var = "rain", years = 2012:2015, cumulative = TRUE, climatology = TRUE)
+#' ## It is possible to add ggplot elements
+#' library(ggplot2)
+#' p1 <- plot(ames, met.var = "rain", years = 2012:2015, cumulative = TRUE)
+#' p1 + ggtitle("Cumulative rain for 2012-2015")
 #' }
 #' 
 plot.met <- function(x, ..., years, met.var, 
@@ -1054,7 +1072,7 @@ plot.met <- function(x, ..., years, met.var,
     x <- x[x$year %in% years,]
   }
   
-  x$Years <- as.factor(x$year)
+  x <- add_column_apsim_met(x, value = as.factor(x$year), name = "Years", units = "()")
   
   if(isFALSE(summary)){
     if(!missing(met.var)){
@@ -1111,7 +1129,8 @@ plot.met <- function(x, ..., years, met.var,
           if(climatology){
             maxt.climatology$climatology <- "climatology"
             mint.climatology$climatology <- "climatology"
-            x$Years <- as.factor(x$year)
+            x <- add_column_apsim_met(x, value = as.factor(x$year), name = "Years", units = "()")
+            x <- as.data.frame(x)
             gp1 <- ggplot2::ggplot() + 
                             ggplot2::geom_line(data = x, ggplot2::aes(day, maxt, color = Years)) +
                             ggplot2::geom_line(data = x, ggplot2::aes(day, mint, color = Years), linetype = 2) +
@@ -1121,16 +1140,19 @@ plot.met <- function(x, ..., years, met.var,
                             ggplot2::geom_hline(yintercept = 0, linetype = 3) + 
                             ggplot2::ylab("Temperature (degree C)")                        
           }else{
+            x <- as.data.frame(x)
             gp1 <- ggplot2::ggplot(data = x) + 
-              ggplot2::geom_line(ggplot2::aes(day, maxt, color = Years)) +
-              ggplot2::geom_line(ggplot2::aes(day, mint, color = Years), linetype = 2) +
+              ggplot2::geom_line(ggplot2::aes(day, maxt, color = Years, linetype = "maxt")) +
+              ggplot2::geom_line(ggplot2::aes(day, mint, color = Years, linetype = "mint")) +
               ggplot2::geom_hline(yintercept = 0, linetype = 3) + 
+              ggplot2::scale_linetype_manual(name = NULL, values = c(1, 2)) + 
               ggplot2::ylab("Temperature (degree C)")            
           }
           print(gp1)        
         }
       }else{
-        if(met.var %in% c("rain", "radn", "vp", "rh", "maxt", "mint", "windspeed")){
+        if(met.var %in% c("rain", "radn", "vp", "rh", "maxt", "mint", "windspeed", 
+                          "Classic_TT", "HeatStress_TT", "CropHeatUnit_TT", "photoperiod")){
           
           met.var.units <- switch(met.var,
                                   rain = "(mm)",
@@ -1139,7 +1161,11 @@ plot.met <- function(x, ..., years, met.var,
                                   maxt = "(degrees C)",
                                   mint = "(degrees C)",
                                   vp = "(hPa)",
-                                  windspeed = "(m/s)")
+                                  windspeed = "(m/s)",
+                                  Classic_TT = "(Cd)",
+                                  HeatStress_TT = "(Cd)",
+                                  CropHeatUnit_TT = "(Cd)",
+                                  photoperiod = "(hours)")
 
           if(climatology){
             met.var.clima <- met.var.climatology[ ,c("day", met.var)]
@@ -1157,6 +1183,7 @@ plot.met <- function(x, ..., years, met.var,
             }
             
             dat$Years <- as.factor(dat$year)
+            
             if(climatology){
               met.var.clima$cum.met.var <- cumsum(met.var.clima[[met.var]])
               
@@ -1174,6 +1201,7 @@ plot.met <- function(x, ..., years, met.var,
           }else{
             ylabel <- paste(met.var, met.var.units)
             if(climatology){
+              x <- as.data.frame(x)
               gp1 <- ggplot2::ggplot() + 
                 ggplot2::geom_point(data = x, ggplot2::aes(day, 
                                                  y = eval(parse(text = eval(met.var))),
@@ -1184,6 +1212,7 @@ plot.met <- function(x, ..., years, met.var,
                 ggplot2::scale_linetype_manual(name = NULL, values = 1) + 
                 ggplot2::ylab(ylabel)                  
             }else{
+              x <- as.data.frame(x)
               gp1 <- ggplot2::ggplot(data = x) + 
                               ggplot2::geom_point(ggplot2::aes(day, 
                                                  y = eval(parse(text = eval(met.var))),
@@ -1239,10 +1268,20 @@ plot.met <- function(x, ..., years, met.var,
       tmp <- rbind(tmp, dat)
     }
     
-    if(plot.type == "ts"){
+    if(plot.type == "ts" && !climatology){
       gp1 <- ggplot2::ggplot(data = tmp, ggplot2::aes(x = year, y = value, color = met.var)) + 
         ggplot2::geom_point() + 
         ggplot2::geom_line() + 
+        ggplot2::ylab(ylabs)
+      print(gp1)      
+    }
+    
+    if(plot.type == "ts" && climatology){
+      y.ints <- aggregate(value ~ met.var, data = tmp, FUN = mean, na.rm = TRUE)$value
+      gp1 <- ggplot2::ggplot(data = tmp, ggplot2::aes(x = year, y = value, color = met.var)) + 
+        ggplot2::geom_point() + 
+        ggplot2::geom_line() +
+        ggplot2::geom_hline(yintercept = y.ints, linetype = 2) + 
         ggplot2::ylab(ylabs)
       print(gp1)      
     }
@@ -1264,6 +1303,117 @@ plot.met <- function(x, ..., years, met.var,
   invisible(gp1)
 }
 
+#' 
+#' @title Add a column to an object of class \sQuote{met}
+#' @rdname add_column_apsim_met
+#' @description The usual way of adding a column to a data frame might
+#' not work for an object of class \sQuote{met}, so this method is recommended
+#' @param met object of class \sQuote{met}
+#' @param value vector of the appropriate length
+#' @param name optional name if the vector value is unnamed
+#' @param units units for the new column (required)
+#' @return an object of class \sQuote{met} with the additional column
+#' @export
+#' @examples
+#' \donttest{
+#' extd.dir <- system.file("extdata", package = "apsimx")
+#' ames <- read_apsim_met("Ames.met", src.dir = extd.dir)
+#' 
+#' ## The recommended method is
+#' val <- abs(rnorm(nrow(ames), 10))
+#' ames <- add_column_apsim_met(ames, value = val, name = "vp", units = "(hPa)")
+#' 
+#' ## This is also possible
+#' vp <- data.frame(vp = abs(rnorm(nrow(ames), 10)))
+#' attr(vp, "units") <- "(hPa)"
+#' ames$vp <- vp
+#' 
+#' ## This is needed to ensure that units and related attributes are also removed
+#' ames <- remove_column_apsim_met(ames, "vp")
+#' ## However, ames$vp <- NULL will also work
+#' }
+#' 
+#' 
+add_column_apsim_met <- function(met, value, name, units){
+  
+  if(!inherits(met, "met"))
+    stop("Object should be of class met.", call. = FALSE)
+  
+  if(missing(name)){
+    name <- names(value)
+    if(is.null(name))
+      stop("If 'name' is not provided, 'value' should be a named vector", call. = FALSE)
+  }
+  
+  if(missing(units))
+    stop("argument 'units' is required for this function", call. = FALSE)
+  
+  units <- as.character(units)
+  
+  ## This invokes '$<-.data.frame' or not?
+  met[[name]] <- value
+  
+  attr(met, "colnames") <- colnames(met)
+  tmp.units <- attr(met, "units")
+  if(length(tmp.units) < length(colnames(met))){
+    attr(met, "units") <- c(tmp.units, units)    
+  }
+  return(met)
+}
 
+#' @rdname add_column_apsim_met
+#' @param x object of class \sQuote{met}
+#' @param name name of the variable to be added or modified
+#' @param value value for the data.frame. It could be an integer, double or vector of length equal to the number of rows in x.
+#' @export
+`$<-.met` <- function(x, name, value){
+  
+  if(is.null(value) && !(name %in% names(x)))
+    stop("Trying to remove a column which is not present in object of class 'met'", call. = FALSE)
+  
+  if(is.null(value) && name %in% names(x)){
+    ## The thing here is that I also need to remove units and column names
+    x[[name]] <- value
+    attr(x, "colnames") <- attr(x, "colnames")[-which(names(x) == name)]
+    attr(x, "units") <- attr(x, "units")[-which(names(x) == name)]
+    return(x)
+  }
+  
+  if(name %in% names(x)){
+    x[[name]] <- value
+    return(x)
+  }
+  
+  if(is.null(attr(value, "units"))){
+    stop("It is recommended to use function add_column_apsim_met for this operation instead.
+         Partly because units are needed", call. = FALSE)    
+  }else{
+    if(!is.null(names(value))){
+      return(add_column_apsim_met(x, value = value, units = attr(value, "units")))  
+    }else{
+      stop("It is recommended to use function add_column_apsim_met for this operation instead.
+         Partly because units are needed", call. = FALSE)    
+    }
+  }
+}
 
-
+#' @rdname add_column_apsim_met
+#' @name remove_column_apsim_met
+#' @param met object of class \sQuote{met}
+#' @param name name of the variable to be removed
+#' @return an object of class \sQuote{met} without the variable (column) in \sQuote{name}
+#' @export
+remove_column_apsim_met <- function(met, name){
+  
+  if(!inherits(met, "met"))
+    stop("Object should be of class met.", call. = FALSE)
+  
+  if(missing(name)){
+      stop("'name' is not provided. It should be the name of the column to remove", call. = FALSE)
+  }
+  
+  attr(met, "units") <- attr(met, "units")[-which(names(met) == name)]   
+  met[[name]] <- NULL
+  attr(met, "colnames") <- names(met)
+  return(met)
+}

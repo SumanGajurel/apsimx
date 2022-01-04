@@ -16,6 +16,11 @@
 #' to the initial values of the parameters. So, for example, if your initial value is 20 
 #' and you provide an upper bound of 5, it means that the actual upper value that you are allowing for is 100. 
 #' 
+#' * I have tested other optimizers and packages, but I think these are enough for most purposes. I tried
+#' function stats::nlm (but it does not support bounds and it can fail), package 'optimx' is a bit messy and it
+#' does not provide sufficient additional functionality. Package 'ucminf' seems like a good alternative, but it
+#' did not perform better than the other ones.
+#' 
 #' @title Optimize parameters in an APSIM Next Generation simulation
 #' @name optim_apsimx
 #' @rdname optim_apsimx
@@ -25,7 +30,8 @@
 #' @param parm.paths absolute or relative paths of the coefficients to be optimized. 
 #'             It is recommended that you use \code{\link{inspect_apsimx}} for this
 #' @param data data frame with the observed data. By default is assumes there is a 'Date' column for the index.
-#' @param type Type of optimization. For now, \code{\link[stats]{optim}} and, if available, \code{\link[nloptr]{nloptr}} or \sQuote{mcmc} through \code{\link[BayesianTools]{runMCMC}}.
+#' @param type Type of optimization. For now, \code{\link[stats]{optim}}, and, if available, \code{\link[nloptr]{nloptr}} or 
+#' \sQuote{mcmc} through \code{\link[BayesianTools]{runMCMC}}. Option \sQuote{ucminf} uses the \code{\link[ucminf]{ucminf}} function.
 #' @param weights Weighting method or values for computing the residual sum of squares. 
 #' @param index Index for filtering APSIM output. Typically, \dQuote{Date}, but it can be c(\dQuote{report}, \dQuote{Date}) for 
 #' multiple simulations
@@ -53,7 +59,7 @@
 
 optim_apsimx <- function(file, src.dir = ".", 
                          parm.paths, data, 
-                         type = c("optim", "nloptr", "mcmc"), 
+                         type = c("optim", "nloptr", "mcmc", "ucminf"), 
                          weights, 
                          index = "Date",
                          parm.vector.index,
@@ -91,8 +97,15 @@ optim_apsimx <- function(file, src.dir = ".",
     }
   }
   
+  if(type == "ucminf"){
+    if(!requireNamespace("ucminf", quietly = TRUE)){
+      warning("The ucminf package is required for this method")
+      return(NULL)
+    }
+  }
+  
   ## Setting up Date
-  datami <- data[,-which(names(data) %in% index), drop = FALSE]
+  datami <- data[ ,-which(names(data) %in% index), drop = FALSE]
   if(any(grepl("Date", index))) data$Date <- as.Date(data$Date)
   
   ## Setting up weights
@@ -100,12 +113,10 @@ optim_apsimx <- function(file, src.dir = ".",
     weights <- rep(1, ncol(datami))
   }else{
     if(weights == "mean"){
-      vmns <- abs(1 / apply(datami, 2, mean))  
-      weights <- (vmns / sum(vmns)) * ncol(datami)
+      weights <- abs(1 / apply(datami, 2, mean, na.rm = TRUE))  
     }else{
       if(weights == "var"){
-        vvrs <- 1 / apply(datami, 2, var)    
-        weights <- (vvrs / sum(vvrs)) * ncol(datami)
+        weights <- 1 / apply(datami, 2, var, na.rm = TRUE)    
       }else{
         if(length(weights) != ncol(datami))
           stop("Weights not of correct length")
@@ -228,12 +239,29 @@ optim_apsimx <- function(file, src.dir = ".",
       stop("names in 'data' do not match names in simulation")
     
     if(length(index) == 1 && index == "Date"){
+      
       sim.s <- subset(sim, sim$Date %in% data[[index]], select = names(data))  
+      sim.s <- sim.s[order(sim.s[, index[1]]),]
+      data <- data[order(data[, index[1]]),]
+      
+      if(!all(sim.s[[index[1]]] == data[[index[1]]]))
+        stop(paste("simulations and data for", index[1], "do not match"))        
+      
     }else{
+      
       if(!is.null(data$report)) data$report <- as.factor(data$report)
       if(!is.null(sim$report)) sim$report <- as.factor(sim$report)
       sim.s0 <- merge(sim, subset(data, select = index), by = index)  
       sim.s <- subset(sim.s0, select = names(data))
+      ## However, they need to be in the exact same order
+      sim.s <- sim.s[order(sim.s[, index[1]], sim.s[ ,index[2]]),]
+      data <- data[order(data[, index[1]], data[, index[2]]),]
+      
+      if(!all(sim.s[[index[1]]] == data[[index[1]]]))
+          stop(paste("simulations and data for", index[1], "do not match"))        
+      
+      if(!all(sim.s[[index[2]]] == data[[index[2]]]))
+        stop(paste("simulations and data for", index[2], "do not match"))        
     }
     
     if(nrow(sim.s) != nrow(data)){
@@ -249,20 +277,20 @@ optim_apsimx <- function(file, src.dir = ".",
     ## Now I need to calculate the residual sum of squares
     ## For this to work all variables should be numeric
     diffs <- as.matrix(data) - as.matrix(sim.s)
-    rss <- sum((diffs * weights)^2)
-    return(rss)
+    rss <- sum(weights * colSums(diffs^2, na.rm = TRUE)) 
+    return(log(rss))
   }
   
   ## Pre-optimized RSS
-  rss <- obj_fun(cfs = rep(1, length(parm.paths)),
-                 parm.paths = parm.paths,
-                 data = data,
-                 iparms = iparms,
-                 weights = weights,
-                 index = index,
-                 parm.vector.index = parm.vector.index,
-                 replacement = replacement,
-                 root = root)
+  pre.lrss <- obj_fun(cfs = rep(1, length(parm.paths)),
+                      parm.paths = parm.paths,
+                      data = data,
+                      iparms = iparms,
+                      weights = weights,
+                      index = index,
+                      parm.vector.index = parm.vector.index,
+                      replacement = replacement,
+                      root = root)
   ## optimization
   if(type == "optim"){
     op <- stats::optim(par = rep(1, length(parm.paths)), 
@@ -276,6 +304,21 @@ optim_apsimx <- function(file, src.dir = ".",
                        replacement = replacement,
                        root = root,
                        ...)    
+  }
+  
+  if(type == "ucminf"){
+    
+    op <- ucminf::ucminf(par = rep(1, length(parm.paths)), 
+                         fn = obj_fun, 
+                         parm.paths = parm.paths, 
+                         data = data, 
+                         iparms = iparms,
+                         weights = weights,
+                         index = index,
+                         parm.vector.index = parm.vector.index,
+                         replacement = replacement,
+                         root = root,
+                         ...)    
   }
   
   if(type == "nloptr"){
@@ -337,7 +380,10 @@ optim_apsimx <- function(file, src.dir = ".",
     return(op.mcmc)
   }
   
-  ans <- structure(list(rss = rss, iaux.parms = iparms, op = op, n = nrow(data),
+  ans <- structure(list(pre.rss = exp(pre.lrss), 
+                        post.rss = exp(op$value), ## This is weighted RSS
+                        weights = weights,
+                        iaux.parms = iparms, op = op, n = nrow(data),
                         parm.vector.index = parm.vector.index),
                    class = "optim_apsim")
   return(ans)
@@ -549,8 +595,32 @@ log_lik <- function(.cfs){
   ## and only the dates that match those in 'data'
   if(!all(names(.data) %in% names(sim))) 
     stop("names in 'data' do not match names in simulation")
-  
-  sim.s <- subset(sim, sim$Date %in% .data[[.index]], select = names(.data))
+
+  if(length(.index) == 1){
+    
+    sim.s <- subset(sim, sim[,.index, drop = FALSE] %in% .data[[.index]], select = names(.data))  
+    sim.s <- sim.s[order(sim.s[, .index]),]
+    .data <- .data[order(.data[, .index]),]
+    
+    if(!all(sim.s[[.index]] == .data[[.index]]))
+      stop(paste("simulations and data for", .index, "do not match"))        
+    
+  }else{
+    
+    if(!is.null(.data$report)) .data$report <- as.factor(.data$report)
+    if(!is.null(sim$report)) sim$report <- as.factor(sim$report)
+    sim.s0 <- merge(sim, subset(.data, select = .index), by = .index)  
+    sim.s <- subset(sim.s0, select = names(.data))
+    ## However, they need to be in the exact same order
+    sim.s <- sim.s[order(sim.s[, .index[1]], sim.s[ ,.index[2]]),]
+    .data <- .data[order(.data[, .index[1]], .data[, .index[2]]),]
+    
+    if(!all(sim.s[[.index[1]]] == .data[[.index[1]]]))
+      stop(paste("simulations and data for", .index[1], "do not match"))        
+    
+    if(!all(sim.s[[.index[2]]] == .data[[.index[2]]]))
+      stop(paste("simulations and data for", .index[2], "do not match"))        
+  }
   
   if(nrow(sim.s) == 0L){
     cat("number of rows in sim", nrow(sim),"\n")

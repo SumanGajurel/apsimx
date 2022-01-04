@@ -12,7 +12,7 @@
 
 <meta name="author" content="Fernando Miguez" />
 
-<meta name="date" content="2021-12-04" />
+<meta name="date" content="2022-01-04" />
 
 <title>Sensitivity Analysis</title>
 
@@ -318,7 +318,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Sensitivity Analysis</h1>
 <h4 class="author">Fernando Miguez</h4>
-<h4 class="date">2021-12-04</h4>
+<h4 class="date">2022-01-04</h4>
 
 
 <div id="TOC">
@@ -462,35 +462,34 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <p>A second option is to use the function <em>morris</em>.</p>
 <div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb7-1" data-line-number="1">X.mrrs &lt;-<span class="st"> </span><span class="kw">morris</span>(<span class="dt">factors =</span> <span class="kw">c</span>(<span class="st">&quot;Fertiliser&quot;</span>, <span class="st">&quot;Population&quot;</span>),</a>
 <a class="sourceLine" id="cb7-2" data-line-number="2">                   <span class="dt">r =</span> <span class="dv">3</span>, <span class="dt">design =</span> <span class="kw">list</span>(<span class="dt">type =</span> <span class="st">&quot;oat&quot;</span>, <span class="dt">levels =</span> <span class="dv">3</span>, <span class="dt">grid.jump =</span> <span class="dv">1</span>),</a>
-<a class="sourceLine" id="cb7-3" data-line-number="3">                   <span class="dt">binf =</span> <span class="kw">c</span>(<span class="dv">0</span>, <span class="dv">5</span>), <span class="dt">bsup =</span> <span class="kw">c</span>(<span class="dv">200</span>, <span class="dv">300</span>))</a>
-<a class="sourceLine" id="cb7-4" data-line-number="4">X.mrrs<span class="op">$</span>X</a></code></pre></div>
-<pre><code>##       Fertiliser Population
-##  [1,]        100        5.0
-##  [2,]        200        5.0
-##  [3,]        200      152.5
-##  [4,]          0      300.0
-##  [5,]          0      152.5
-##  [6,]        100      152.5
-##  [7,]        100      152.5
-##  [8,]          0      152.5
-##  [9,]          0        5.0</code></pre>
+<a class="sourceLine" id="cb7-3" data-line-number="3">                   <span class="dt">binf =</span> <span class="kw">c</span>(<span class="dv">0</span>, <span class="dv">5</span>), <span class="dt">bsup =</span> <span class="kw">c</span>(<span class="dv">200</span>, <span class="dv">300</span>))</a></code></pre></div>
+<pre><code>## Warning in morris(factors = c(&quot;Fertiliser&quot;, &quot;Population&quot;), r = 3, design =
+## list(type = &quot;oat&quot;, : keeping 2 repetitions out of 3</code></pre>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb9-1" data-line-number="1">X.mrrs<span class="op">$</span>X</a></code></pre></div>
+<pre><code>##      Fertiliser Population
+## [1,]        100        5.0
+## [2,]        200        5.0
+## [3,]        200      152.5
+## [4,]        200        5.0
+## [5,]        200      152.5
+## [6,]        100      152.5</code></pre>
 <p>The sensitivity package allows for decoupling the simulation runs and the analysis of the results. For example:</p>
-<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb9-1" data-line-number="1"><span class="co">## This takes 2-3 minutes</span></a>
-<a class="sourceLine" id="cb9-2" data-line-number="2">sns2 &lt;-<span class="st"> </span><span class="kw">sens_apsimx</span>(<span class="st">&quot;Wheat.apsimx&quot;</span>, <span class="dt">src.dir =</span> tmp.dir,</a>
-<a class="sourceLine" id="cb9-3" data-line-number="3">                     <span class="dt">parm.paths =</span> <span class="kw">c</span>(pp1, pp2),</a>
-<a class="sourceLine" id="cb9-4" data-line-number="4">                     <span class="dt">grid =</span> X.mrrs<span class="op">$</span>X)</a>
-<a class="sourceLine" id="cb9-5" data-line-number="5"><span class="co">## These are the sensitivity results for AboveGround.Wt only</span></a>
-<a class="sourceLine" id="cb9-6" data-line-number="6">sns.res.ag &lt;-<span class="st"> </span><span class="kw">tell</span>(X.mrrs, sns2<span class="op">$</span>grid.sims<span class="op">$</span>Wheat.AboveGround.Wt)</a>
-<a class="sourceLine" id="cb9-7" data-line-number="7">sns.res.ag</a>
-<a class="sourceLine" id="cb9-8" data-line-number="8"><span class="co">## Call: morris(factors = c(&quot;Fertiliser&quot;, &quot;Population&quot;), </span></a>
-<a class="sourceLine" id="cb9-9" data-line-number="9"><span class="co">## r = 3, design = list(type = &quot;oat&quot;, levels = 3, grid.jump = 1), </span></a>
-<a class="sourceLine" id="cb9-10" data-line-number="10"><span class="co">## binf = c(0, 5), bsup = c(200, 300))</span></a>
-<a class="sourceLine" id="cb9-11" data-line-number="11"><span class="co">## </span></a>
-<a class="sourceLine" id="cb9-12" data-line-number="12"><span class="co">## Model runs: 9 </span></a>
-<a class="sourceLine" id="cb9-13" data-line-number="13"><span class="co">##                 mu  mu.star    sigma</span></a>
-<a class="sourceLine" id="cb9-14" data-line-number="14"><span class="co">## Fertiliser 916.6674 916.6674 662.8798</span></a>
-<a class="sourceLine" id="cb9-15" data-line-number="15"><span class="co">## Population 448.4530 448.4530 640.6807</span></a>
-<a class="sourceLine" id="cb9-16" data-line-number="16"><span class="kw">plot</span>(sns.res.ag)</a></code></pre></div>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb11-1" data-line-number="1"><span class="co">## This takes 2-3 minutes</span></a>
+<a class="sourceLine" id="cb11-2" data-line-number="2">sns2 &lt;-<span class="st"> </span><span class="kw">sens_apsimx</span>(<span class="st">&quot;Wheat.apsimx&quot;</span>, <span class="dt">src.dir =</span> tmp.dir,</a>
+<a class="sourceLine" id="cb11-3" data-line-number="3">                     <span class="dt">parm.paths =</span> <span class="kw">c</span>(pp1, pp2),</a>
+<a class="sourceLine" id="cb11-4" data-line-number="4">                     <span class="dt">grid =</span> X.mrrs<span class="op">$</span>X)</a>
+<a class="sourceLine" id="cb11-5" data-line-number="5"><span class="co">## These are the sensitivity results for AboveGround.Wt only</span></a>
+<a class="sourceLine" id="cb11-6" data-line-number="6">sns.res.ag &lt;-<span class="st"> </span><span class="kw">tell</span>(X.mrrs, sns2<span class="op">$</span>grid.sims<span class="op">$</span>Wheat.AboveGround.Wt)</a>
+<a class="sourceLine" id="cb11-7" data-line-number="7">sns.res.ag</a>
+<a class="sourceLine" id="cb11-8" data-line-number="8"><span class="co">## Call: morris(factors = c(&quot;Fertiliser&quot;, &quot;Population&quot;), </span></a>
+<a class="sourceLine" id="cb11-9" data-line-number="9"><span class="co">## r = 3, design = list(type = &quot;oat&quot;, levels = 3, grid.jump = 1), </span></a>
+<a class="sourceLine" id="cb11-10" data-line-number="10"><span class="co">## binf = c(0, 5), bsup = c(200, 300))</span></a>
+<a class="sourceLine" id="cb11-11" data-line-number="11"><span class="co">## </span></a>
+<a class="sourceLine" id="cb11-12" data-line-number="12"><span class="co">## Model runs: 9 </span></a>
+<a class="sourceLine" id="cb11-13" data-line-number="13"><span class="co">##                 mu  mu.star    sigma</span></a>
+<a class="sourceLine" id="cb11-14" data-line-number="14"><span class="co">## Fertiliser 916.6674 916.6674 662.8798</span></a>
+<a class="sourceLine" id="cb11-15" data-line-number="15"><span class="co">## Population 448.4530 448.4530 640.6807</span></a>
+<a class="sourceLine" id="cb11-16" data-line-number="16"><span class="kw">plot</span>(sns.res.ag)</a></code></pre></div>
 <p>I’m not running the code in this vignette to save time, but hopefully this is sufficient information to illustrate performing sensitivity analysis using package <strong>apsimx</strong> and <strong>sensitivity</strong>.</p>
 </div>
 </div>

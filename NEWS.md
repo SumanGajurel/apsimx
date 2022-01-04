@@ -1,5 +1,15 @@
 **NEWS**
 
+**apsimx 2.3**
+
+- Fixed bug in napad_apsim_met and also wrote more extensive tests (test_apsim_met)
+- Added method confint for optim_apsim class and fixed bug related to this issue
+- Added package 'ucminf' as an additional optimization type
+- optim functions data argument data frame can contain missing data
+- function get_daymet_apsim_met (which used to depend on the FedData package) is depracated. 
+It has been replaced by the previous get_daymet2_apsim_met function.
+- remove use of raster package
+
 **apsimx 2.2**
 
 - By deault it runs for newer versions of APSIM Next Gen (Sep 2021 or newer) (Classic is unchanged)

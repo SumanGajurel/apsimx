@@ -12,7 +12,7 @@
 
 <meta name="author" content="Fernando Miguez" />
 
-<meta name="date" content="2021-12-04" />
+<meta name="date" content="2022-01-04" />
 
 <title>Parameter Optimization</title>
 
@@ -318,7 +318,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Parameter Optimization</h1>
 <h4 class="author">Fernando Miguez</h4>
-<h4 class="date">2021-12-04</h4>
+<h4 class="date">2022-01-04</h4>
 
 
 <div id="TOC">
@@ -501,13 +501,13 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 ##   Values:  1.2 
 ##   Parameter path:  Wheat.Cultivars.USA.Yecora.BasePhyllochron 
 ##   Values:  120 
-##   Pre-optimized RSS:  142759.4 
+##   Pre-optimized (weighted) RSS:  
 ## Optimized values: 
 ##   Parameter path:  Wheat.Leaf.Photosynthesis.RUE.FixedValue 
 ##   Values:  1.494 
 ##   Parameter path:  Wheat.Cultivars.USA.Yecora.BasePhyllochron 
 ##   Values:  87.631 
-##   Optimized RSS:  51.76588 
+##   Optimized (weighted) RSS:  
 ## Convergence: 0</code></pre>
 <p>We can see that the optimized values are very close to the known values which were used to simulate the data. The known value for RUE was 1.5 <span class="math inline">\(g \; MJ^{-1}\)</span> and for BasePhyllochron it was 90 GDD.</p>
 <p>In addition, it is good practice to compute the Hessian matrix, since it provides information about standard errors and confidence intervals.</p>
@@ -527,17 +527,17 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 ##   Values:  1.2 
 ##   Parameter path:  Wheat.Cultivars.USA.Yecora.BasePhyllochron 
 ##   Values:  120 
-##   Pre-optimized RSS:  142759.4 
+##   Pre-optimized (weighted) RSS:  
 ## Optimized values: 
 ##   Parameter path:  Wheat.Leaf.Photosynthesis.RUE.FixedValue 
 ##   Values:  1.494 
-##   CI level:  0.95 t:  2.306004  SE: 0.003 
-##   Lower:  1.487   Upper:  1.502 
+##   CI level:  0.95 t:  2.306004  SE: 0.001 
+##   Lower:  1.493   Upper:  1.496 
 ##   Parameter path:  Wheat.Cultivars.USA.Yecora.BasePhyllochron 
 ##   Values:  87.631 
-##   CI level:  0.95 t:  2.306004  SE: 0.29 
-##   Lower:  86.962  Upper:  88.299 
-##   Optimized RSS:  51.76588 
+##   CI level:  0.95 t:  2.306004  SE: 4.835 
+##   Lower:  76.481  Upper:  98.781 
+##   Optimized (weighted) RSS:  
 ## Convergence: 0</code></pre>
 <p>After optimization there is good agreement between observed and simulated.</p>
 <div class="sourceCode" id="cb28"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb28-1" data-line-number="1"><span class="co">## We re-run the model because the Wheat-opt-ex.apsimx file </span></a>

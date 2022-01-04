@@ -39,7 +39,8 @@
 #' @param parm.paths absolute paths of the coefficients to be optimized. 
 #'             It is recommended that you use \code{\link{inspect_apsim}} or \code{\link{inspect_apsim_xml}}  for this.
 #' @param data data frame with the observed data. By default is assumes there is a 'Date' column for the index.
-#' @param type Type of optimization. For now, \code{\link[stats]{optim}} and, if available, \code{\link[nloptr]{nloptr}} or \sQuote{mcmc} through \code{\link[BayesianTools]{runMCMC}}.
+#' @param type Type of optimization. For now, \code{\link[stats]{optim}} and, if available, \code{\link[nloptr]{nloptr}} or 
+#' \sQuote{mcmc} through \code{\link[BayesianTools]{runMCMC}}. Option \sQuote{ucminf} uses the \code{\link[ucminf]{ucminf}} function.
 #' @param weights Weighting method or values for computing the residual sum of squares (see Note). 
 #' @param index Index for filtering APSIM output. \sQuote{Date} is currently used. (I have not tested how well it works using anything other than Date).
 #' @param parm.vector.index Index to optimize a specific element of a parameter vector. At the moment it is
@@ -59,7 +60,7 @@
 
 optim_apsim <- function(file, src.dir = ".", 
                         crop.file, parm.paths, data, 
-                        type = c("optim", "nloptr","mcmc"), 
+                        type = c("optim", "nloptr","mcmc", "ucminf"), 
                         weights, index = "Date",
                         parm.vector.index,
                         xml.parm,
@@ -97,6 +98,13 @@ optim_apsim <- function(file, src.dir = ".",
     }
   }
   
+  if(type == "ucminf"){
+    if(!requireNamespace("ucminf", quietly = TRUE)){
+      warning("The ucminf package is required for this method.")
+      return(NULL)
+    }
+  }
+  
   ## Index can now potentially reference two columns
   datami <- data[,-which(names(data) %in% index), drop = FALSE]
   if(any(grepl("Date", index))) data$Date <- as.Date(data$Date)
@@ -106,12 +114,10 @@ optim_apsim <- function(file, src.dir = ".",
     weights <- rep(1, ncol(datami))
   }else{
     if(weights == "mean"){
-      vmns <- abs(1 / apply(datami, 2, mean))  
-      weights <- (vmns / sum(vmns)) * ncol(datami)
+      weights <- abs(1 / apply(datami, 2, mean, na.rm = TRUE))  
     }else{
       if(weights == "var"){
-        vvrs <- 1 / apply(datami, 2, var)    
-        weights <- (vvrs / sum(vvrs)) * ncol(datami)
+        weights <- 1 / apply(datami, 2, var, na.rm = TRUE)    
       }else{
         if(length(weights) != ncol(datami))
           stop("Weights not of correct length")
@@ -241,11 +247,28 @@ optim_apsim <- function(file, src.dir = ".",
     
     if(length(index) == 1 && index == "Date"){
       sim.s <- subset(sim, sim$Date %in% data[[index]], select = names(data))  
+      
+      sim.s <- sim.s[order(sim.s[, index[1]]),]
+      data <- data[order(data[, index[1]]),]
+      
+      if(!all(sim.s[[index[1]]] == data[[index[1]]]))
+        stop(paste("simulations and data for", index[1], "do not match"))   
+      
     }else{
       if(!is.null(data$outfile)) data$outfile <- as.factor(data$outfile)
       if(!is.null(sim$outfile)) sim$outfile <- as.factor(sim$outfile)
       sim.s0 <- merge(sim, subset(data, select = index), by = index)  
       sim.s <- subset(sim.s0, select = names(data))
+      
+      ## However, they need to be in the exact same order
+      sim.s <- sim.s[order(sim.s[, index[1]], sim.s[ ,index[2]]),]
+      data <- data[order(data[, index[1]], data[, index[2]]),]
+      
+      if(!all(sim.s[[index[1]]] == data[[index[1]]]))
+        stop(paste("simulations and data for", index[1], "do not match"))        
+      
+      if(!all(sim.s[[index[2]]] == data[[index[2]]]))
+        stop(paste("simulations and data for", index[2], "do not match"))   
     }
 
     if(ncol(sim.s) != ncol(data)){
@@ -261,21 +284,21 @@ optim_apsim <- function(file, src.dir = ".",
     ## Now I need to calculate the residual sum of squares
     ## For this to work all variables should be numeric
     diffs <- as.matrix(data) - as.matrix(sim.s)
-    rss <- sum(weights * colSums(diffs^2)) 
-    return(rss)
+    rss <- sum(weights * colSums(diffs^2, na.rm = TRUE)) 
+    return(log(rss))
   }
   
   ## Pre-optimized RSS
-  rss <- obj_fun(cfs = rep(1, length(parm.paths)),
-                 parm.paths = parm.paths,
-                 data = data,
-                 file = file,
-                 aux.file = aux.file,
-                 iaux.parms = iaux.parms,
-                 weights = weights,
-                 index = index,
-                 parm.vector.index = parm.vector.index,
-                 xml.parm = cfile)
+  pre.lrss <- obj_fun(cfs = rep(1, length(parm.paths)),
+                      parm.paths = parm.paths,
+                      data = data,
+                      file = file,
+                      aux.file = aux.file,
+                      iaux.parms = iaux.parms,
+                      weights = weights,
+                      index = index,
+                      parm.vector.index = parm.vector.index,
+                      xml.parm = cfile)
   ## optimization
   if(type == "optim"){
     op <- stats::optim(par = rep(1, length(parm.paths)), 
@@ -290,6 +313,21 @@ optim_apsim <- function(file, src.dir = ".",
                        parm.vector.index = parm.vector.index,
                        xml.parm = cfile,
                        ...)    
+  }
+  
+  if(type == "ucminf"){
+    op <- ucminf::ucminf(par = rep(1, length(parm.paths)), 
+                         fn = obj_fun, 
+                         parm.paths = parm.paths, 
+                         data = data, 
+                         file = file,
+                         aux.file = aux.file, 
+                         iaux.parms = iaux.parms,
+                         weights = weights,
+                         index = index,
+                         parm.vector.index = parm.vector.index,
+                         xml.parm = cfile,
+                         ...)    
   }
   
   if(type == "nloptr"){
@@ -352,15 +390,18 @@ optim_apsim <- function(file, src.dir = ".",
 
   }
   
-  ## rss are the pre-optimized residual sum of squares
-  ## op$value are the optimized residual sum of squares
+  ## pre.rss are the pre-optimized residual sum of squares
+  ## op$value are the optimized weighted residual sum of squares in the log scale
   ## The next line is only true when optimizing one single variable
   ## logLik <- 0.5 * ( - N * (log(2 * pi) + 1 - log(N) + log(op$value))
 
-  ans <- structure(list(rss = rss, iaux.parms = iaux.parms, 
-                        op = op, n = nrow(data),
+  ans <- structure(list(pre.rss = exp(pre.lrss), 
+                        post.rss = exp(op$value), ## This is weighted
+                        weights = weights,
+                        iaux.parms = iaux.parms, op = op, n = nrow(data),
                         parm.vector.index = parm.vector.index),
                    class = "optim_apsim")
+
   return(ans)
 }
 
@@ -383,7 +424,7 @@ print.optim_apsim <- function(x, ..., digits = 3, level = 0.95){
     if(x$parm.vector.index[i] > 0) cat("Vector index: ", x$parm.vector.index[i], "\n")
     cat("\t Values: ", x$iaux.parms[[i]], "\n")
   }   
-  cat("\t Pre-optimized RSS: ", x$rss, "\n")
+  cat("\t Pre-optimized (weighted) RSS: ", x$pre.rss, "\n")
   cat("Optimized values: \n")
   
   for(i in seq_along(x$iaux.parms)){
@@ -402,7 +443,7 @@ print.optim_apsim <- function(x, ..., digits = 3, level = 0.95){
       ## I actually found this way of computing SE here:
       ## https://www.researchgate.net/post/In_R_how_to_estimate_confidence_intervals_from_the_Hessian_matrix
       degf <- x$n - length(x$iaux.parms) ## Degrees of freedom
-      par.se <- sqrt((2 * (1 / (x$op$hessian[i,i])) * x$op$value) / degf)
+      par.se <- sqrt((2 * (1 / (x$op$hessian[i,i])) * x$iaux.parms[[i]]^2) / degf)
       qTT <- -1 * stats::qt((1 - level) * 0.5, degf) ## t statistic
       cat("\t CI level: ", level, "t: ", qTT, " SE:", round(par.se * x$iaux.parms[[i]], digits),"\n")
       if(x$parm.vector.index[i] <= 0){
@@ -415,7 +456,7 @@ print.optim_apsim <- function(x, ..., digits = 3, level = 0.95){
       }
     }
   }   
-  cat("\t Optimized RSS: ", x$op$value, "\n")
+  cat("\t Optimized (weighted) RSS: ", x$post.rss, "\n")
   cat("Convergence:", x$op$convergence,"\n")
 }
   
@@ -474,13 +515,37 @@ log_lik2 <- function(.cfs){
   ## and only the dates that match those in 'data'
   if(!all(names(.data) %in% names(sim))) 
     stop("names in 'data' do not match names in simulation")
-  
-  sim.s <- subset(sim, sim$Date %in% .data[[.index]], select = names(.data))
-  
+
+  if(length(.index) == 1){
+    sim.s <- subset(sim, sim[, .index, drop = FALSE] %in% .data[[.index]], select = names(.data))  
+    
+    sim.s <- sim.s[order(sim.s[, .index[1]]),]
+    .data <- .data[order(.data[, .index[1]]),]
+    
+    if(!all(sim.s[[.index[1]]] == .data[[.index[1]]]))
+      stop(paste("simulations and data for", .index[1], "do not match"))   
+    
+  }else{
+    if(!is.null(.data$outfile)) .data$outfile <- as.factor(.data$outfile)
+    if(!is.null(sim$outfile)) sim$outfile <- as.factor(sim$outfile)
+    sim.s0 <- merge(sim, subset(.data, select = .index), by = .index)  
+    sim.s <- subset(sim.s0, select = names(.data))
+    
+    ## However, they need to be in the exact same order
+    sim.s <- sim.s[order(sim.s[, .index[1]], sim.s[ ,.index[2]]),]
+    .data <- .data[order(.data[, .index[1]], .data[, .index[2]]),]
+    
+    if(!all(sim.s[[.index[1]]] == .data[[.index[1]]]))
+      stop(paste("simulations and data for", .index[1], "do not match"))        
+    
+    if(!all(sim.s[[.index[2]]] == .data[[.index[2]]]))
+      stop(paste("simulations and data for", .index[2], "do not match"))   
+  }
+    
   if(nrow(sim.s) == 0L) stop("no rows selected in simulations")
   ## Assuming they are aligned, get rid of the 'index' column
   sim.s <- sim.s[,-which(names(sim.s) == .index)]
-  data <- .data[,-which(names(.data) == .index)]
+  .data <- .data[,-which(names(.data) == .index)]
   ## Now I need to calculate the residual sum of squares
   ## For this to work all variables should be numeric
   diffs <- as.matrix(.data) - as.matrix(sim.s)
@@ -515,7 +580,7 @@ vcov.optim_apsim <- function(object, ..., scaled = TRUE){
   sd.vec <- numeric(nrow(hess))
   degf <- object$n - nrow(hess)
   for(i in 1:nrow(hess)){
-    sd.vec[i] <- sqrt((2 * 1/(hess[i,i]) * object$op$value) / degf)
+    sd.vec[i] <- sqrt((2 * 1/(hess[i,i]) * object$iaux.parms[[i]]^2) / degf)
   }
   ans <- t(sd.vec * cor.mat) * sd.vec
   return(ans)
@@ -550,6 +615,64 @@ coef.optim_apsim <- function(object, ..., scaled = FALSE){
   return(ans)
 }
 
+#' @rdname optim_apsim
+#' @description Confidence intervals for parameter estimates for an \sQuote{optim_apsim} object
+#' @param object object of class \sQuote{optim_apsim}
+#' @param parm parameter to select (it can be a regular expression)
+#' @param level confidence level (default is 0.95)
+#' @param ... additional arguments (none used at the moment)
+#' @return a matrix with lower and upper limits and the point estimate (coef)
+#' @export
+#' 
+
+confint.optim_apsim <- function(object, parm, level = 0.95, ...){
+  
+  if(is.null(object$op$hessian)) 
+    stop("Hessian is needed to calculate confidence intervals", call. = FALSE)
+
+  if(level < 0 || level > 1)
+    stop("level should be between 0 and 1", call. = FALSE)
+  
+  x <- object
+  
+  ans <- matrix(ncol = 3, nrow = length(x$iaux.parms))
+  colnames(ans) <- c("lwr", "coef", "upr")
+  rownames(ans) <- names(x$iaux.parms)
+
+  for(i in seq_along(x$iaux.parms)){
+    
+    if(x$parm.vector.index[i] <= 0){
+      ans[i, 2] <- x$iaux.parms[[i]] * x$op$par[i]
+    }else{
+      pvi <- x$parm.vector.index[i]
+      x$iaux.parms[[i]][pvi] <- x$iaux.parms[[i]][pvi] * x$op$par[i]
+      ans[i, 2] <- x$iaux.parms[[i]]
+    }
+    
+    ## I actually found this way of computing SE here:
+    ## That post references the Introduction to R section 11.7.2
+    degf <- x$n - length(x$iaux.parms) ## Degrees of freedom
+    par.se <- sqrt((2 * (1 / (x$op$hessian[i,i])) * x$iaux.parms[[i]]^2) / degf)
+    qTT <- -1 * stats::qt((1 - level) * 0.5, degf) ## t statistic
+      if(x$parm.vector.index[i] <= 0){
+        ans[i, 1] <- (x$op$par[i] - qTT * par.se) * x$iaux.parms[[i]]
+        ans[i, 3] <- (x$op$par[i] + qTT * par.se) * x$iaux.parms[[i]]
+      }else{
+        pvi <- x$parm.vector.index[i]
+        ans[i, 1] <- (x$op$par[i] - qTT * par.se) * x$iaux.parms[[i]][pvi]
+        ans[i, 3] <- (x$op$par[i] + qTT * par.se) * x$iaux.parms[[i]][pvi]
+      }
+  }
+  
+  if(!missing(parm)){
+    w.parm <- grep(parm, names(x$iaux.parms))
+    if(length(w.parm) == 0)
+      stop("'parm' not found", call. = FALSE)
+    ans <- ans[w.parm, , drop = FALSE]
+  }
+  return(ans)
+}
+
 #' Create an apsim environment for MCMC
 #' 
 #' @title Environment to store data for apsim MCMC
@@ -558,3 +681,5 @@ coef.optim_apsim <- function(object, ..., scaled = FALSE){
 #' @export
 #' 
 mcmc.apsim.env <- new.env(parent = emptyenv())
+
+

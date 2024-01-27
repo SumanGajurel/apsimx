@@ -1,5 +1,7 @@
 #'
 #' This function requires the \CRANpkg{nasapower} package version 4.0.0.
+#' 
+#' It looks like the earliest year you can request data for is 1984.
 #'
 #' @title Get NASA-POWER data for an APSIM met file
 #' @description Uses \code{\link[nasapower]{get_power}} from the \CRANpkg{nasapower} package to download data to create an APSIM met file.
@@ -66,17 +68,20 @@ get_power_apsim_met <- function(lonlat, dates, wrt.dir = ".", filename = NULL){
   
   comments <- paste("!data from nasapower R package. retrieved: ", Sys.time())
     
+  ## Calculating annual amplitude in mean monthly temperature
+
   attr(pwr, "filename") <- filename
   attr(pwr, "site") <- paste("site =", sub(".met", "", filename, fixed = TRUE))
   attr(pwr, "latitude") <- paste("latitude =", lonlat[2])
   attr(pwr, "longitude") <- paste("longitude =", lonlat[1])
   attr(pwr, "tav") <- paste("tav =", mean(colMeans(pwr[,c("maxt","mint")], na.rm=TRUE), na.rm=TRUE))
-  attr(pwr, "amp") <- paste("amp =", mean(pwr$maxt, na.rm=TRUE) - mean(pwr$mint, na.rm = TRUE))
   attr(pwr, "colnames") <- names(pwr)
   attr(pwr, "units") <- units
   attr(pwr, "comments") <- comments
   ## No constants
   class(pwr) <- c("met", "data.frame")
+  
+  pwr <- amp_apsim_met(pwr)
   
   if(filename != "noname.met"){
     write_apsim_met(pwr, wrt.dir = wrt.dir, filename = filename)

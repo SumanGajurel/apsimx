@@ -7,12 +7,17 @@
 #' @param shift simple mechanism for creating an area of interest by displacing the point indicated in 
 #' lonlat by some amount of distance (e.g. 300 - in meters)
 #' @param nmapunit number of mapunits to select (see \code{\link{ssurgo2sp}})
-#' @param nsoil number of soils to select (see \code{\link{ssurgo2sp}})
+#' @param nsoil number of soils to select (see \code{\link{ssurgo2sp}}). If the 
+#' number of soils is negative or NA it will fetch all the soils in the mapunit
 #' @param xout see \code{\link{ssurgo2sp}}
 #' @param soil.bottom see \code{\link{ssurgo2sp}}
 #' @param method interpolation method see \code{\link{ssurgo2sp}}
 #' @param nlayers number for layer for the new soil profile
+#' @param check whether to check for reasonable values using \code{\link{check_apsimx_soil_profile}}.
+#' TRUE by default. If \sQuote{fix} is TRUE, it will be applied only after the fix attempt.
+#' @param fix whether to fix compatibility between saturation and bulk density (default is FALSE).
 #' @param verbose default FALSE. Whether to print messages.
+#' @param xargs additional arguments passed to \code{\link{apsimx_soil_profile}} function.
 #' @return this function will always return a list. Each element of the list will
 #' be an object of class \sQuote{soil_profile}
 #' @export
@@ -24,6 +29,8 @@
 #' require(spData)
 #' ## Soil inforation for a single point
 #' sp <- get_ssurgo_soil_profile(lonlat = c(-93, 42))
+#' ## The initial attempt throws warnings, so better to use 'fix'
+#' sp <- get_ssurgo_soil_profile(lonlat = c(-93, 42), fix = TRUE)
 #' plot(sp[[1]])
 #' plot(sp[[1]], property = "water")
 #' }
@@ -33,9 +40,12 @@
 get_ssurgo_soil_profile <- function(lonlat, shift = -1,
                                     nmapunit = 1, nsoil = 1,
                                     xout = NULL, soil.bottom = 200,
-                                    method = c("constant","linear"),
+                                    method = c("constant", "linear"),
                                     nlayers = 10,
-                                    verbose = FALSE){
+                                    check = TRUE,
+                                    fix = FALSE,
+                                    verbose = FALSE,
+                                    xargs = NULL){
   
   if(!requireNamespace("soilDB", quietly = TRUE)){
     stop("The soilDB package is required for this function")
@@ -101,6 +111,11 @@ get_ssurgo_soil_profile <- function(lonlat, shift = -1,
     fSDA <- soilDB::fetchSDA(sql, duplicates = TRUE)
   } 
   
+  ## Number of soils is the number of rows on fSDA@site
+  if(nsoil < 0 || is.na(nsoil)){
+    nsoil <- nrow(fSDA@site)
+  }
+  
   ### Mapunit ### -- this might contain the iacornsr
   if(verbose == FALSE){
     mapunit <- suppressWarnings(suppressMessages(soilDB::get_mapunit_from_SDA(sql)))
@@ -154,6 +169,19 @@ get_ssurgo_soil_profile <- function(lonlat, shift = -1,
     metadata <- attributes(sp0[[i]])
     metadata$DataSource <- paste("SSURGO (https://sdmdataaccess.nrcs.usda.gov/) through R package soilDB, R package apsimx function ssurgo2sp. Timestamp",Sys.time())
     metadata$names <- NULL; metadata$class <- NULL; metadata$row.names <- NULL;
+
+    if(fix){
+      icheck <- check
+      check <- FALSE
+    } 
+    
+    if(!is.null(xargs)){
+      if(!is.null(xargs$crops)){
+        crops <- xargs$crops
+      }
+    }else{
+      crops <- c("Maize", "Soybean", "Wheat")
+    }
     
     asp <- apsimx_soil_profile(nlayers = nlayers,
                                Thickness = sp0[[i]]$Thickness * 10,
@@ -169,9 +197,15 @@ get_ssurgo_soil_profile <- function(lonlat, shift = -1,
                                ParticleSizeSilt = sp0[[i]]$ParticleSizeSilt,
                                ParticleSizeSand = sp0[[i]]$ParticleSizeSand,
                                soil.bottom = soil.bottom,
-                               metadata = metadata)
+                               metadata = metadata,
+                               check = check, 
+                               crops = crops)
     
-    ## check_apsimx_soil_profile(asp)
+    if(fix){
+      asp <- fix_apsimx_soil_profile(asp, verbose = verbose)
+      if(icheck)
+        check_apsimx_soil_profile(asp)
+    } 
     
     ans[[i]] <- asp
   }

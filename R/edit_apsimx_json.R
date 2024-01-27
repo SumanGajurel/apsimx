@@ -11,15 +11,20 @@
 #'  
 #'  When node equals Report, the editing allows to add variables, but not to remove them at the moment.
 #' 
+#'  When node equals Operations, \sQuote{parm} should have a list with two elements. The first should be the line(s) to edit and 
+#'  the second should be the component(s) to edit. Either \sQuote{Date}, \sQuote{Action} or \sQuote{Line}.
+#'  When more than one line is edited, \sQuote{value} should be a character vector of the same length as the number of
+#'  lines to edit.
+#'  
 #' @name edit_apsimx
 #' @param file file ending in .apsimx to be edited (JSON)
 #' @param src.dir directory containing the .apsimx file to be edited; defaults to the current working directory
 #' @param wrt.dir should be used if the destination directory is different from the src.dir
 #' @param node either \sQuote{Clock}, \sQuote{Weather}, \sQuote{Soil}, 
-#' \sQuote{SurfaceOrganicMatter}, \sQuote{MicroClimate}, \sQuote{Crop}, \sQuote{Manager}, \sQuote{Report} or \sQuote{Other} 
+#' \sQuote{SurfaceOrganicMatter}, \sQuote{MicroClimate}, \sQuote{Crop}, \sQuote{Manager}, \sQuote{Report}, \sQuote{Operations} or \sQuote{Other} 
 #' @param soil.child specific soil component to be edited
 #' @param manager.child specific manager component to be edited
-#' @param parm parameter to be edited
+#' @param parm parameter to be edited. It can be a regular expression.
 #' @param value new values for the parameter to be edited 
 #' @param overwrite logical; if \code{TRUE} the old file is overwritten, a new file is written otherwise
 #' @param edit.tag if the file is edited a different tag from the default \sQuote{-edited} can be used.
@@ -57,7 +62,9 @@
 #'              parm = "Amount", value = 200, verbose = TRUE)
 #'              
 #' ## Make sure it worked
-#' inspect_apsimx("Maize-edited.apsimx", src.dir = tmp.dir, node = "Manager")
+#' inspect_apsimx("Maize-edited.apsimx", src.dir = tmp.dir, 
+#'                node = "Manager",
+#'                parm = list("SowingFertiliser", NA))
 #' 
 #' ## Remove the file
 #' file.remove(file.path(tmp.dir, "Maize-edited.apsimx"))
@@ -65,14 +72,14 @@
 #' 
 
 edit_apsimx <- function(file, src.dir = ".", wrt.dir = NULL,
-                        node = c("Clock", "Weather", "Soil", "SurfaceOrganicMatter", "MicroClimate", "Crop", "Manager", "Report", "Other"),
+                        node = c("Clock", "Weather", "Soil", "SurfaceOrganicMatter", "MicroClimate", "Crop", "Manager", "Report", "Operations", "Other"),
                         soil.child = c("Metadata", "Water", "SoilWater", "Organic", "Physical", "Analysis", "Chemical", "InitialWater", "Sample"),
                         manager.child = NULL,
                         parm = NULL, value = NULL, 
                         overwrite = FALSE,
                         edit.tag = "-edited",
                         parm.path = NULL,
-                        root,
+                        root = NULL,
                         verbose = TRUE){
   
   .check_apsim_name(file)
@@ -104,8 +111,8 @@ edit_apsimx <- function(file, src.dir = ".", wrt.dir = NULL,
   ## Where is the 'Core' simulation?
   wcore <- grep("Core.Simulation", apsimx_json$Children)
 
-  if(length(wcore) > 1){
-    if(missing(root)){
+  if(length(wcore) > 1 || !is.null(root)){
+    if(is.null(root)){
       cat("Simulation structure: \n")
       str_list(apsimx_json)
       stop("more than one simulation found and no root node label has been specified \n select one of the children names above")   
@@ -152,7 +159,7 @@ edit_apsimx <- function(file, src.dir = ".", wrt.dir = NULL,
   }else{
     parent.node <- apsimx_json$Children[[wcore]]$Children  
   }
-
+  
   ## Edit the 'Clock'
   if(node == "Clock"){
     parm.choices <- c("Start","End")
@@ -248,7 +255,10 @@ edit_apsimx <- function(file, src.dir = ".", wrt.dir = NULL,
     if(soil.child == "Water" || soil.child == "Physical"){
       edited.child <- soil.child
       
-      wwn <- grep("^Water|Physical", sapply(soil.node[[1]]$Children, function(x) x$Name)) 
+      ## In older versions of APSIM Next Gen instead of 'Physical' it was called
+      ## 'Water'. Now "InitialWater" has been renamed to simply "Water"
+      ## So here we now just look for "Physical"
+      wwn <- grep("Physical", sapply(soil.node[[1]]$Children, function(x) x$Name)) 
       soil.water.node <- soil.node[[1]]$Children[[wwn]]
 
       if(soil.water.node$Name != "Water" && soil.water.node$Name != "Physical"){
@@ -258,7 +268,7 @@ edit_apsimx <- function(file, src.dir = ".", wrt.dir = NULL,
       
       crop.parms <- c("XF", "KL", "LL")
       
-      if(parm %in% crop.parms || any(sapply(crop.parms, function(x) grepl(x, parm)))){
+      if(parm %in% crop.parms || any(sapply(crop.parms, function(x) grepl(x, parm))) && parm != "LL15"){
         ## Maybe we are trying to edit the parameter for a specific crop
         ## The first options matches the parameter exactly 
         if(parm %in% crop.parms){
@@ -448,6 +458,48 @@ edit_apsimx <- function(file, src.dir = ".", wrt.dir = NULL,
     core.zone.node[wmmn] <- manager.node
   }
   
+  if(node == "Operations"){
+    won <- grepl("Models.Operations", core.zone.node)
+    operations.node <- core.zone.node[won]
+    
+    if(length(operations.node) > 1)
+      stop("Not ready to handle multiple 'Operations'", call. = FALSE)
+    
+    if(is.null(operations.node[[1]]$Operation))
+      stop("'Operation' child node not found", call. = FALSE)
+    
+    ## Here the assumption is that 'parm' is a line and a component to edit
+    if(length(parm) != 2)
+      stop("'parm' should be a list of length 2. The first should be the line and the second should be the component", call. = FALSE)
+    
+    if(length(parm[[1]]) != length(value))
+      stop("lenght of the first 'parm' element should be equal to the length of 'value'", call. = FALSE)
+    
+    if(parm[[2]] == "Date"){
+      for(i in seq_along(value)){
+        operations.node[[1]]$Operation[[parm[[1]][i]]]$Date <- value[i]    
+      }
+    }
+    
+    if(parm[[2]] == "Action"){
+      for(i in seq_along(value)){
+        operations.node[[1]]$Operation[[parm[[1]][i]]]$Action <- value[i]    
+      }
+    }
+    
+    if(parm[[2]] == "Line"){
+      for(i in seq_along(value)){
+        operations.node[[1]]$Operation[[parm[[1]][i]]]$Line <- value[i]    
+      }
+    }
+    
+    if(!parm[[2]] %in% c("Date", "Action", "Line"))
+      stop("The second 'parm' component should be either 'Date', 'Action', or 'Line'", call. = FALSE)
+
+    core.zone.node[won][[1]]$Operation <- operations.node[[1]]$Operation
+    parm <- unlist(parm)
+  }
+  
   if(node == "Report"){
     wrn <- grepl("Models.Report", core.zone.node)
     report.node <- core.zone.node[wrn]
@@ -607,7 +659,7 @@ edit_apsimx <- function(file, src.dir = ".", wrt.dir = NULL,
   if(node != "Other"){
     parent.node[wcz][[1]]$Children <- core.zone.node
     
-    if(length(wcore) > 1){
+    if(length(wcore) > 1 || !is.null(root)){
       ## I have to assume that root was supplied 
       ## otherwise an error would have been triggered before
       if(length(root) == 1){

@@ -108,12 +108,13 @@ get_iemre_apsim_met <- function(lonlat, dates, wrt.dir=".", filename=NULL,
   attr(iem.dat2, "latitude") <- paste("latitude =", lonlat[2])
   attr(iem.dat2, "longitude") <- paste("longitude =", lonlat[1])
   attr(iem.dat2, "tav") <- paste("tav =",mean(colMeans(iem.dat2[,c("maxt","mint")], na.rm=TRUE), na.rm=TRUE))
-  attr(iem.dat2, "amp") <- paste("amp =",mean(iem.dat2$maxt, na.rm=TRUE) - mean(iem.dat2$mint, na.rm = TRUE))
   attr(iem.dat2, "colnames") <- names(iem.dat2)
   attr(iem.dat2, "units") <- units
   attr(iem.dat2, "comments") <- comments
   ## No constants
   class(iem.dat2) <- c("met", "data.frame")
+  
+  iem.dat2 <- amp_apsim_met(iem.dat2)
   
   if(filename != "noname.met"){
     write_apsim_met(iem.dat2, wrt.dir = wrt.dir, filename = filename)
@@ -184,8 +185,6 @@ get_iem_apsim_met <- function(lonlat, dates, wrt.dir = ".",
   if(!missing(lonlat)){
     lon <- as.numeric(lonlat[1])
     lat <- as.numeric(lonlat[2])
-    ## Need to find the state based on lonlat
-    pts <- sf::st_as_sf(data.frame(lon = lon, lat = lat), coords = 1:2, crs = 4326)
     
     if(!requireNamespace("sf",quietly = TRUE)){
       warning("The sf is required for this function")
@@ -196,6 +195,9 @@ get_iem_apsim_met <- function(lonlat, dates, wrt.dir = ".",
       warning("The spData is required for this function")
       return(NULL)
     }
+    
+    ## Need to find the state based on lonlat
+    pts <- sf::st_as_sf(data.frame(lon = lon, lat = lat), coords = 1:2, crs = 4326)
     
     states <- spData::us_states ## This object contains states and their geometries
     states <- sf::st_transform(states, crs = 3857)
@@ -213,7 +215,7 @@ get_iem_apsim_met <- function(lonlat, dates, wrt.dir = ".",
     yr1 <- as.numeric(format(as.Date(dates[1]), "%Y"))
     yr2 <- as.numeric(format(as.Date(dates[2]), "%Y"))
     
-    ## This chucnk of code selects stations which have data in the desired range
+    ## This chunk of code selects stations which have data in the desired range
     start.year <- sapply(ftrs$properties$time_domain, function(x) as.numeric(gsub("(", "", strsplit(x, "-")[[1]][1], fixed = TRUE)))
     end.year0 <- sapply(ftrs$properties$time_domain, function(x) gsub("(", "", strsplit(x, "-")[[1]][2], fixed = TRUE))
     end.year <- ifelse(end.year0 == "Now)", 
@@ -236,6 +238,9 @@ get_iem_apsim_met <- function(lonlat, dates, wrt.dir = ".",
     station.coords <- sf::st_transform(station.coords, crs = 3857)
     near.station.index <- sf::st_nearest_feature(pts, station.coords)
     station <- ftrs[near.station.index, "id"]
+    
+    ## Compute distance between input point and station
+    pt.to.station.distance <- sf::st_distance(pts, station.coords[near.station.index, ])
     
   }else{
   
@@ -271,6 +276,8 @@ get_iem_apsim_met <- function(lonlat, dates, wrt.dir = ".",
   
   if(!missing(lonlat)){
     attr(iem.dat, "longitude") <- paste("longitude =", lonlat[1], "(DECIMAL DEGREES)")
+    ## Add distance as a comment
+    attr(iem.dat, "comment") <- paste("Distance from station to input point (meters):", round(pt.to.station.distance))
   }
   
   if(missing(lonlat)){

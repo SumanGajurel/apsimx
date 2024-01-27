@@ -86,3 +86,63 @@ if(run.apsim.met && internet){
   plot(ames, met.var = "Classic_TT")
     
 }
+
+if(run.apsim.met){
+ 
+  iem <- get_iem_apsim_met(lonlat = c(-93.77, 42.02), 
+                           dates = c("2013-01-01","2013-12-31"))
+  
+  pwr <- get_power_apsim_met(lonlat = c(-93.77, 42.02), 
+                           dates = c("2013-01-01","2013-12-31"))
+  
+  dmt <- get_daymet_apsim_met(lonlat = c(-93.77, 42.02), 
+                              years = 2013)
+  
+  cmp <- compare_apsim_met(iem, pwr[, 1:6], dmt[, 1:6], 
+                           labels = c("IEM", "POWER", "DAYMET"))
+  
+  cmp <- compare_apsim_met(iem, pwr[, 1:6], dmt[, 1:6], 
+                           met.var = "rain",
+                           labels = c("IEM", "POWER", "DAYMET"))
+
+  plot(cmp)
+  plot(cmp, plot.type = "ts")
+  plot(cmp, plot.type = "ts", met.var = "rain", cumulative = TRUE)
+
+}
+
+if(run.apsim.met){
+  
+  ## Testing the graph functionality
+  pwr <- get_power_apsim_met(lonlat = c(-93.77, 42.02), 
+                             dates = c("1990-01-01","2020-12-31"))
+  
+  ## Plotting using the density option
+  plot(pwr, plot.type = "density")
+  plot(pwr, plot.type = "density", met.var = "radn")
+  plot(pwr, plot.type = "density", met.var = "rain")
+  
+  ## Plotting using the density option
+  plot(pwr, plot.type = "density", climatology = TRUE)
+  plot(pwr, plot.type = "density", met.var = "radn", climatology = TRUE)
+  plot(pwr, plot.type = "density", met.var = "rain", climatology = TRUE)
+  
+  plot(pwr, plot.type = "density", climatology = TRUE, years = c(2012, 2019))
+  plot(pwr, plot.type = "density", met.var = "radn", climatology = TRUE, years = c(2012, 2019))
+  plot(pwr, plot.type = "density", met.var = "rain", climatology = TRUE, years = c(2012, 2019))
+
+  plot(pwr, plot.type = "density", summary = TRUE)
+  plot(pwr, plot.type = "density", met.var = "radn_sum", summary = TRUE)
+  plot(pwr, plot.type = "density", met.var = "rain", summary = TRUE)
+  
+  ## Testing the options with individual years
+  plot(pwr, plot.type = "density", summary = TRUE, years = c(2012:2015))
+  plot(pwr, plot.type = "density", met.var = "radn", summary = TRUE, years = c(2012, 2019))
+  plot(pwr, plot.type = "density", met.var = "rain", summary = TRUE, years = c(2015, 2017))
+  
+  ## Testing with climatology and years
+  plot(pwr, plot.type = "density", met.var = "rain", summary = TRUE, climatology = TRUE, years = c(2012, 2019))
+  plot(pwr, plot.type = "density", met.var = "radn_sum", summary = TRUE, climatology = TRUE, years = c(2012, 2019))
+  plot(pwr, plot.type = "density", met.var = "avg_maxt", summary = TRUE, climatology = TRUE, years = c(2012, 2019))
+
+}

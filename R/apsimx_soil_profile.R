@@ -45,10 +45,12 @@
 #' @param metadata list with soil metadata. For possible parameters and values see an example of \code{\link{inspect_apsimx}} with soil.child = \dQuote{Metadata}.
 #' @param soilwat optional \sQuote{list} of class \sQuote{soilwat_parms}
 #' @param swim optional \sQuote{list} of class \sQuote{swim_parms}
+#' @param initialwater optional \sQuote{list} of class \sQuote{initialsoilwater_parms}
 #' @param soilorganicmatter optional \sQuote{list} of class \sQuote{soilorganicmatter_parms}
 #' @param dist.parms parameter values for creating a profile. If a == 0 and b == 0 then \cr
 #' a constant value of 1 is used. If a == 0 and b != 0, then an exponential decay is used. \cr
 #' If a != 0 and b != 0 then the equation is \code{a*soil.layer*exp(-b*soil.layer)}.  
+#' @param check whether to check for reasonable values using \code{\link{check_apsimx_soil_profile}}
 #' @return a soil profile with class \sQuote{soil_profile} with elements \sQuote{soil}, \sQuote{crops}, \sQuote{metadata},
 #' \sQuote{soilwat} and \sQuote{swim}.
 #' @export
@@ -91,8 +93,10 @@ apsimx_soil_profile <-  function(nlayers = 10,
                                  metadata = NULL,
                                  soilwat = NA,
                                  swim = NA,
+                                 initialwater = NA,
                                  soilorganicmatter = NA,
-                                 dist.parms = list(a = 0, b = 0.2)){
+                                 dist.parms = list(a = 0, b = 0.2),
+                                 check = TRUE){
 
   if(!is.null(Depth) & !is.null(Thickness)){
     stop("Only specify Depth OR Thickness")
@@ -407,11 +411,11 @@ apsimx_soil_profile <-  function(nlayers = 10,
     
     soil <- cbind(soil, crop.soil)
     
-    ans <- list(soil=soil, crops = crops, metadata = metadata, soilwat = soilwat, swim = swim, soilorganicmatter = soilorganicmatter)
+    ans <- list(soil=soil, crops = crops, metadata = metadata, soilwat = soilwat, swim = swim, initialwater = initialwater, soilorganicmatter = soilorganicmatter)
     class(ans) <- "soil_profile"
     
     ## Check for reasonable values
-    check_apsimx_soil_profile(ans)
+    if(check) check_apsimx_soil_profile(ans)
     
     return(ans)
   }
@@ -590,16 +594,20 @@ plot.soil_profile <- function(x,..., property = c("all", "water","BD",
 
 #' Check an apsimx soil profile
 #' 
+#' The value of soil particle density (2.65 g/cm3) is hard coded in APSIM. 
+#' https://en.wikipedia.org/wiki/Bulk_density
+#' 
 #' @rdname apsimx_soil_profile
 #' @description checking an apsimx soil profile for reasonable values
 #' @param x object of class \sQuote{soil_profile} or the \sQuote{soil} 
 #' component within an object of class \sQuote{soil_profile}.
+#' @param particle.density default value for soil particle density (2.65 g/cm3)
 #' @return It does not produce output unless potential issues are found. Only warnings
 #' are produced and it returns an object of class \sQuote{soil_profile}.
 #' @export 
 #' 
 
-check_apsimx_soil_profile <- function(x){
+check_apsimx_soil_profile <- function(x, particle.density = 2.65){
   
   if(!inherits(x, "soil_profile"))
     stop("object should be of class 'soil_profile'", call. = FALSE)
@@ -716,9 +724,101 @@ check_apsimx_soil_profile <- function(x){
   
   if(any(AirDryminuscrop.LL < 0))
     warning("crop.LL cannot be lower than AirDry")
+  
+  ## This check is from APSIM Next Gen Models/Soils/Soil.cs line 250
+  ## Compute max BD for each layer
+  spd <- particle.density
+  max_bd <- (1 - soil$SAT) * spd
+  bd_diff <- max_bd - soil$BD
 
+  for(j in seq_along(max_bd)){
+    if(bd_diff[j] <= 0){
+      warning(paste("Saturation of:", soil$SAT[j], "in layer:", j, "is above acceptable value of:", 1 - soil$BD[j] / spd, ".",
+                    "You must adjust bulk density to below", (1 - soil$SAT[j]) * spd, "OR saturation to below", 1 - soil$BD[j] / 2.65))      
+    }
+  }
+  
+  ## Check for initial water
+  if(!is.null(soil$initialwater)){
+    ## Initial Water can't be greater than DUL?
+    if(!is.na(soil$initialwater$InitialValues)){
+      for(j in seq_along(soil$initialwater$InitialValues)){
+        iwat <- soil$initialwater$InitialValues[j] - soil$DUL[j]
+        if(iwat <= 0){
+          warning(paste("Initial Water in layer:", j, "is greater than DUL"))
+        }
+      }      
+    }
+  }
+  
   return(invisible(x))
 }
+
+#'
+#' @title Fixing a soil profile
+#' @name fix_apsimx_soil_profile
+#' @param x object of class \sQuote{soil_profile}
+#' @param soil.var whether to change SAT or BD. At the moment it only changes SAT.
+#' @param particle.density soil particle density 
+#' @param verbose whether to print the changes made to the soil profile
+#' @noRd
+#' @author Fernando Miguez with input from Julien Morel
+#' @examples
+#' \donttest{
+#' sp <- get_isric_soil_profile(lonlat = c(1, 48))
+#' ## This produces a warning
+#' sp1 <- apsimx:::fix_apsimx_soil_profile(sp)
+#' check_apsimx_soil_profile(sp1)
+#' }
+fix_apsimx_soil_profile <- function(x, soil.var = c("SAT", "BD"), particle.density = 2.65, verbose = TRUE){
+  
+  if(!inherits(x, "soil_profile"))
+    stop("object should be of class 'soil_profile'", call. = FALSE)
+  ## Heuristics for fixing soil profiles
+  
+  soil.var <- match.arg(soil.var)
+  
+  ## Bulk density and saturation issue
+  max_bd <- (1 - x$soil$SAT) * 2.65
+  bd_diff <- max_bd - x$soil$BD
+  
+  for(j in seq_along(max_bd)){
+    if(bd_diff[j] <= 0){
+      x$soil$SAT[j] <- 1 - x$soil$BD[j] / 2.65 - 0.001
+      if(verbose && soil.var == "SAT"){
+        cat("Saturation of:", x$soil$SAT[j], "in layer:", j, "was above acceptable value of:", 1 - x$soil$BD[j] / 2.65, ".",
+            "It was adjusted to:", 1 - x$soil$BD[j] / 2.65 - 0.001, "\n")              
+      }
+      ## Fixing LL and air dry issue
+      if(x$soil$LL15[j] < x$soil$AirDry[j]){
+        if(verbose){
+          cat("LL15 cannot be lower than AirDry in layer:", j,".\n",
+              "It was adjusted to the value of AirDry.\n")
+        }
+        x$soil$LL15[j] <- x$soil$AirDry[j]
+      }
+    }
+  }
+  
+  ## Trying to fix the initialwater issue
+  if(!is.na(x$initialwater)){
+    if(!is.na(x$initialwater$InitialValues)){
+      for(j in seq_along(x$initialwater$InitialValues)){
+        iwat <- x$initialwater$InitialValues[j] - x$soil$DUL[j]
+        if(iwat < 0){
+          x$initialwater$InitialValues[j] <- x$soil$DUL * 0.9  
+          if(verbose){
+            cat("InitialWater cannot be greater than DUL in layer:", j,".\n",
+                "It was adjusted to the value of 0.9 * DUL.\n")
+          }
+        }
+      }
+    }
+  }
+  
+  return(x)
+}
+
 
 #' 
 #' @title Compare two or more soil profiles
@@ -727,6 +827,9 @@ check_apsimx_soil_profile <- function(x){
 #' @description Helper function which allows for a simple comparison among soil_profile objects
 #' @param ... met file objects. Should be of class \sQuote{met}
 #' @param soil.var meteorological variable to use in the comparison. Either \sQuote{all},
+#' \sQuote{radn}, \sQuote{maxt}, \sQuote{mint}, \sQuote{rain}, \sQuote{rh}, 
+#' \sQuote{wind_speed} or \sQuote{vp}. 
+#' @param property meteorological variable to use in the comparison. Either \sQuote{all},
 #' \sQuote{radn}, \sQuote{maxt}, \sQuote{mint}, \sQuote{rain}, \sQuote{rh}, 
 #' \sQuote{wind_speed} or \sQuote{vp}. 
 #' @param labels labels for plotting and identification of \sQuote{soil_profile} objects.
@@ -758,6 +861,7 @@ compare_apsim_soil_profile <- function(...,
                                           "DUL", "SAT", "KS", "Carbon", "SoilCNRatio",
                                           "FOM", "FOM.CN", "FBiom", "FInert", "NO3N",
                                           "NH4N", "PH"),
+                                      property,
                                       labels,
                                       check = FALSE,
                                       verbose = FALSE){
@@ -767,6 +871,11 @@ compare_apsim_soil_profile <- function(...,
   n.soils <- length(soils)
   
   soil.var <- match.arg(soil.var)
+  
+  if(!missing(property)) soil.var <- property
+  
+  if(!missing(property) && soil.var == "all")
+    warning("Either use property or soil.var but not both. soil.var will be ignored.")
   
   if(n.soils < 2) stop("you should provide at least two soil_profiles", call. = FALSE)
   
@@ -953,7 +1062,10 @@ plot.soil_profile_mrg <- function(x, ..., plot.type = c("depth", "vs", "diff", "
     warning("ggplot2 is required for this plotting function")
     return(NULL)
   }
-  
+
+  plot.type <- match.arg(plot.type)
+  soil.var <- match.arg(soil.var)
+    
   if(plot.type != "depth" && soil.var == "all")
     stop("Please select a soil variable for this type of plot", call. = FALSE)
   
@@ -963,9 +1075,6 @@ plot.soil_profile_mrg <- function(x, ..., plot.type = c("depth", "vs", "diff", "
   
   m.nms <- attr(x, "soil.names")
   if(max(pairs) > attr(x, "length.soils")) stop("pairs index larger than length of soils")
-  
-  plot.type <- match.arg(plot.type)
-  soil.var <- match.arg(soil.var)
   
   if(soil.var == "all"){
     num.vars <- length(grep(".1", names(x), fixed = TRUE))
@@ -1094,6 +1203,9 @@ plot.soil_profile_mrg <- function(x, ..., plot.type = c("depth", "vs", "diff", "
 #' If \sQuote{m2} is used, then the output units will be \sQuote{kg/m2}. If the \sQuote{area}
 #' is \sQuote{ha}, then the output units will be \sQuote{Mg/ha}.
 #' 
+#' Note that the bulk density (which is needed in the calculation) is
+#' available as part of the \sQuote{soil_profile} object.
+#' 
 #' @title Calculate soil carbon stocks
 #' @description Calculation of carbon stocks based on an object of class \sQuote{soil_profile}
 #' @name carbon_stocks
@@ -1178,6 +1290,102 @@ carbon_stocks <- function(x, depth, area = c("m2", "ha"), method = c("linear", "
     ans <- total.carbon
     attr(ans, "units") <- "kg/m2"
   }
+  attr(ans, "depth (m)") <- depth 
+  return(ans)
+}
+
+#' Function to calculate available water content. The output units depend on the choice of area.
+#' If \sQuote{m} is used, then the output units will be \sQuote{mm}. If the \sQuote{area} is \sQuote{m2},
+#' then the output units will be in \sQuote{m3}. If the \sQuote{area} is \sQuote{ha}, then the output units will be \sQuote{kg/ha}.
+#' 
+#' @title Calculate available water content
+#' @description Calculation of available water content based on an object of class \sQuote{soil_profile}
+#' @name available_water_content
+#' @param x object of class \sQuote{soil_profile}
+#' @param depth soil depth (in meters). If missing then the whole soil profile is used.
+#' @param area either \sQuote{m} meter, \sQuote{m2} meter squared or \sQuote{ha}.
+#' @param method interpolation method. Either \sQuote{linear} or \sQuote{constant}.
+#' @param weights optional weights
+#' @param ... additional arguments passed to internal functions (none used at the moment).
+#' @return returns a value with attribute \sQuote{units} and \sQuote{depth}
+#' @export
+#' @examples 
+#' \dontrun{
+#' sp <- apsimx_soil_profile()
+#' available_water_content(sp)
+#' }
+
+available_water_content <- function(x, 
+                                    depth, 
+                                    area = c("m", "m2", "ha"), 
+                                    method = c("linear", "constant"), 
+                                    weights, ...){
+  
+  if(!inherits(x, "soil_profile")){
+    stop("This function is intended to be used with an object of class 'soil_profile'", call. = FALSE)
+  }
+  
+  bottom <- sum(x$soil$Thickness) * 1e-3 ## Thickness is in mm, so after conversion this is in meters
+  
+  if(!missing(depth)){
+    if(depth <= 0) stop("'depth' should be a positive number", call. = FALSE)
+    if(depth > bottom) stop("'depth' should be a lower number than the bottom of the soil profile ", call. = FALSE)
+    if(depth > 10){
+      warning("'depth' should be in meters and the value entered is larger than 10. Is this correct?")
+    }
+  }
+  
+  area <- match.arg(area)
+  method <- match.arg(method)
+  
+  ## Compute carbon for the whole profile
+  if(missing(depth)){
+    layer.depth <- x$soil$Thickness ## Thickness in mm
+    layer.awc <- x$soil$DUL - x$soil$LL15
+    total.awc <- sum(layer.depth * layer.awc)
+    depth <- bottom
+  }else{
+    ## If depth only includes the first layer
+    if(depth <= x$soil$Thickness[1] * 1e-3){
+      first.layer.awc <- x$soil$DUL[1] - x$soil$LL15[1]
+      total.awc <- first.layer.awc * (depth * 1e3) ## Depth is in meters, this answer is in mm
+    }else{
+      total.awc <- 0
+      cum.thick <- cumsum(x$soil$Thickness) * 1e-3 ## Cumulative thickness in meters
+      for(i in 1:nrow(x$soil)){
+        ## If the desired depth is greater than the current depth
+        ## then add the available water content as it is
+        if(depth >= cum.thick[i]){ 
+          layer.awc <- (x$soil$DUL[i] - x$soil$LL15[i]) * x$soil$Thickness[i] ## in mm
+          total.awc <- total.awc + layer.awc
+        }else{
+          ## In this case, we need to interpolate 
+          awc <- x$soil$DUL - x$soil$LL15
+          dat <- data.frame(depth = cum.thick, awc = awc)
+          tmp.awc <- stats::approx(dat$depth, y = dat$awc, xout = depth, method = method)
+          layer.awc <- tmp.awc$y * (depth - cum.thick[i - 1]) * 1e3 ## This is in mm
+          total.awc <- total.awc + layer.awc
+          break
+        }
+      }
+    }
+  }
+
+  if(area == "m"){
+    ans <- total.awc 
+    attr(ans, "units") <- "mm"
+  }
+  
+  if(area == "m2"){
+    ans <- total.awc * 1e-3 ## 1e-3 converts from mm to m3
+    attr(ans, "units") <- "m3"
+  }
+  
+  if(area == "ha"){
+    ans <- total.awc * 1e4 ## 1 mm is = 1 kg/m2, 1 ha = 10000m2
+    attr(ans, "units") <- "kg/ha"
+  }
+  
   attr(ans, "depth (m)") <- depth 
   return(ans)
 }

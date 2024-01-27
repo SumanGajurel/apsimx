@@ -15,6 +15,8 @@ sens_apsim(
   summary = c("mean", "max", "var", "sd", "none"),
   root,
   verbose = TRUE,
+  cores = 1L,
+  save,
   ...
 )
 }
@@ -43,6 +45,12 @@ an xml file. Its length should be equal to the length or \sQuote{parm.paths}.}
 \item{root}{root argument for \code{\link{edit_apsim}}}
 
 \item{verbose}{whether to print progress in percent and elapsed time.}
+
+\item{cores}{number of cores to use for parallel evaluation}
+
+\item{save}{whether to save intermediate results. By default they will be saved as a
+\sQuote{csv} file using the name of the apsim file. This will replace \sQuote{apsim} with \sQuote{csv}.
+It is also possible to provide the file name here (for example: \sQuote{Some_results.csv}).}
 
 \item{...}{additional arguments (none used at the moment).}
 }

@@ -58,6 +58,9 @@ compare_apsim_met <- function(...,
   
   met1 <- mets[[1]]
   
+  if(!inherits(met1, "met"))
+    stop("The first object should be of class 'met'", call. = FALSE)
+  
   m.nms <- NULL
   if(!missing(labels)){
     m.nms <- labels
@@ -79,8 +82,14 @@ compare_apsim_met <- function(...,
 
   for(i in 2:n.mets){
     
-    met.i <- as.data.frame(mets[[i]])
+    if(!inherits(mets[[i]], "met")){
+      stp.mssg <- paste("Object in position:", i, "is of class:", class(met.i),
+                        ". Was expecting an object of class 'met'.")
+      stop(stp.mssg, call. = FALSE)
+    }
     
+    met.i <- as.data.frame(mets[[i]])
+
     if(ncol(met1) != ncol(met.i)) stop("met objects should have the same number of columns", call. = FALSE)
     if(all(!names(met1) %in% names(met.i))) stop("met objects should have the same column names", call. = FALSE)
     if(check) check_apsim_met(met.i)
@@ -95,12 +104,13 @@ compare_apsim_met <- function(...,
   }
   
   if(met.var == "all"){
-    ans <- data.frame(variable = setdiff(names(met1), c("year", "day")),
+    vrs <- rep(setdiff(names(met1), c("year", "day")), each = n.mets - 1)
+    ans <- data.frame(variable = vrs,
                       vs = NA, labels = NA,
                       bias = NA, slope = NA, corr = NA)
     if(missing(labels)) ans$labels <- NULL
   }else{
-    ans <- data.frame(variable = met.var,
+    ans <- data.frame(variable = rep(met.var, n.mets - 1),
                       vs = NA, labels = NA,
                       bias = NA, slope = NA, corr = NA)
     if(missing(labels)) ans$labels <- NULL
@@ -112,8 +122,9 @@ compare_apsim_met <- function(...,
     gvar.sel <- paste0(met.var.sel, collapse = "|")
     idx.met.mrg <- grep(gvar.sel, names(met.mrg))
     met.mrg.s <- met.mrg[,idx.met.mrg]
-  
+
     k <- 1  
+    z <- 1
     ## Compute Bias matrix
     for(i in met.var.sel){
       if(verbose) cat("Variable: ", i, "\n")
@@ -139,15 +150,15 @@ compare_apsim_met <- function(...,
         ans$rss[k] <- deviance(fm0)
         if(verbose) cat(" \t RMSE: ", sigma(fm0), "\n")
         ans$rmse[k] <- sigma(fm0)
+        k <- k + 1
       }
-      k <- k + 1
     }
   }
   
   if(met.var != "all"){
     ## Just select the appropriate variable
     idx.met.mrg <- grep(met.var, names(met.mrg))
-    met.mrg.s <- met.mrg[,idx.met.mrg]
+    met.mrg.s <- met.mrg[, idx.met.mrg]
     
     if(verbose) cat("Variable ", met.var, "\n")
     ans$variable[1] <- met.var
@@ -155,20 +166,20 @@ compare_apsim_met <- function(...,
     tmp <- met.mrg.s
     for(j in 2:ncol(tmp)){
       if(verbose) cat(names(tmp)[j - 1], " vs. ", names(tmp)[j], "\n")
-      ans$vs[1] <- paste(names(tmp)[j - 1], "vs.", names(tmp)[j])
+      ans$vs[j - 1] <- paste(names(tmp)[j - 1], "vs.", names(tmp)[j])
       if(!missing(labels)){
         if(verbose) cat("labels", labels[j - 1], " vs. ", labels[j], "\n")
-        ans$labels[1] <- paste(labels[j - 1], "vs.", labels[j])
+        ans$labels[j - 1] <- paste(labels[j - 1], "vs.", labels[j])
       }
       fm0 <- lm(tmp[, j - 1] ~ tmp[, j])
       if(verbose) cat(" \t Bias: ", coef(fm0)[1], "\n")
-      ans$bias[1] <- coef(fm0)[1]
+      ans$bias[j - 1] <- coef(fm0)[1]
       if(verbose) cat(" \t Slope: ", coef(fm0)[2], "\n")
-      ans$slope[1] <- coef(fm0)[2]
+      ans$slope[j - 1] <- coef(fm0)[2]
       if(verbose) cat(" \t Corr: ", cor(tmp[,j - 1], tmp[, j]), "\n")
-      ans$corr[1] <- cor(tmp[,j - 1], tmp[, j])
+      ans$corr[j - 1] <- cor(tmp[,j - 1], tmp[, j])
       if(verbose) cat(" \t RSS: ", deviance(fm0), "\n")
-      ans$rss[1] <- deviance(fm0)
+      ans$rss[j - 1] <- deviance(fm0)
       if(verbose) cat(" \t RMSE: ", sigma(fm0), "\n")
       ans$rmse <- sigma(fm0)
     }
@@ -339,7 +350,7 @@ plot.met_mrg <- function(x, ..., plot.type = c("vs", "diff", "ts", "density"),
 #' For the Northern hemisphere calendar days are used (1-365).
 #' For the Southern hemisphere the year is split in two halfs, but the second half of
 #' the year is used as the first part of the growing season.
-#' If not frost is found a zero is returned.
+#' If frost is not found a zero is returned.
 #'
 #' @title Summary for an APSIM met file
 #' @name summary.met

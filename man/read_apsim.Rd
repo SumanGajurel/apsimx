@@ -8,7 +8,8 @@ read_apsim(
   file = "",
   src.dir = ".",
   value = c("report", "all"),
-  date.format = "\%d/\%m/\%Y"
+  date.format = "\%d/\%m/\%Y",
+  silent = FALSE
 )
 }
 \arguments{
@@ -16,9 +17,11 @@ read_apsim(
 
 \item{src.dir}{source directory where file is located}
 
-\item{value}{either \sQuote{report} (data.frame) or \sQuote{all} (list)}
+\item{value}{either \sQuote{report} (data.frame), \sQuote{user-defined} or \sQuote{all} (list)}
 
 \item{date.format}{format for adding \sQuote{Date} column}
+
+\item{silent}{whether to issue warnings or suppress them}
 }
 \value{
 This function returns a data frame with APSIM output or a list if value equals \sQuote{all}
@@ -36,4 +39,7 @@ maize.out <- read_apsim("Maize", src.dir = extd.dir, value = "report")
 millet.out <- read_apsim("Millet", src.dir = extd.dir, value = "report")
 }
 
+}
+\seealso{
+\code{\link{read_apsim_all}}
 }

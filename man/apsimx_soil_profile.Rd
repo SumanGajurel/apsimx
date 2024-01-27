@@ -38,8 +38,10 @@ apsimx_soil_profile(
   metadata = NULL,
   soilwat = NA,
   swim = NA,
+  initialwater = NA,
   soilorganicmatter = NA,
-  dist.parms = list(a = 0, b = 0.2)
+  dist.parms = list(a = 0, b = 0.2),
+  check = TRUE
 )
 
 \method{plot}{soil_profile}(
@@ -49,7 +51,7 @@ apsimx_soil_profile(
     "SoilCNRatio", "FOM", "FOM.CN", "FBiom", "FInert", "NO3N", "NH4N", "PH")
 )
 
-check_apsimx_soil_profile(x)
+check_apsimx_soil_profile(x, particle.density = 2.65)
 }
 \arguments{
 \item{nlayers}{Number of soil layers (default = 10)}
@@ -114,11 +116,15 @@ check_apsimx_soil_profile(x)
 
 \item{swim}{optional \sQuote{list} of class \sQuote{swim_parms}}
 
+\item{initialwater}{optional \sQuote{list} of class \sQuote{initialsoilwater_parms}}
+
 \item{soilorganicmatter}{optional \sQuote{list} of class \sQuote{soilorganicmatter_parms}}
 
 \item{dist.parms}{parameter values for creating a profile. If a == 0 and b == 0 then \cr
 a constant value of 1 is used. If a == 0 and b != 0, then an exponential decay is used. \cr
 If a != 0 and b != 0 then the equation is \code{a*soil.layer*exp(-b*soil.layer)}.}
+
+\item{check}{whether to check for reasonable values using \code{\link{check_apsimx_soil_profile}}}
 
 \item{x}{object of class \sQuote{soil_profile} or the \sQuote{soil} 
 component within an object of class \sQuote{soil_profile}.}
@@ -126,6 +132,8 @@ component within an object of class \sQuote{soil_profile}.}
 \item{...}{additional plotting arguments (none use at the moment).}
 
 \item{property}{\dQuote{all} for plotting all soil properties, \dQuote{water} for just SAT, DUL and LL15}
+
+\item{particle.density}{default value for soil particle density (2.65 g/cm3)}
 }
 \value{
 a soil profile with class \sQuote{soil_profile} with elements \sQuote{soil}, \sQuote{crops}, \sQuote{metadata},
@@ -155,6 +163,9 @@ distribution of soil physical and chemical properties. Steps:
  3. The distribution can be specified with the \sQuote{a} and \sQuote{c} parameter of an exponential decay function, using a list. E.g. DUL = list(0.35, 0, -0.1).
  This means that the top value for DUL will be 0.35 and it will decay with a rate of -0.1. \cr
  4. If an increase and then a decay is needed the Ricker function can be used. See \sQuote{SSricker} in the \sQuote{nlraa} package. \cr
+
+The value of soil particle density (2.65 g/cm3) is hard coded in APSIM. 
+https://en.wikipedia.org/wiki/Bulk_density
 }
 \examples{
 \donttest{

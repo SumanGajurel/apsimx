@@ -7,9 +7,10 @@
 read_apsim_all(
   filenames,
   src.dir = ".",
-  value = c("report", "all"),
+  value = "report",
   date.format = "\%d/\%m/\%Y",
-  simplify = TRUE
+  simplify = TRUE,
+  silent = FALSE
 )
 }
 \arguments{
@@ -17,17 +18,21 @@ read_apsim_all(
 
 \item{src.dir}{source directory where files are located}
 
-\item{value}{either \sQuote{report} or \sQuote{all} (only \sQuote{report} implemented at the moment)}
+\item{value}{either \sQuote{report}, \sQuote{user-defined} or \sQuote{all} (not implemented at the moment)}
 
 \item{date.format}{format for adding \sQuote{Date} column}
 
 \item{simplify}{whether to return a single data frame or a list.}
+
+\item{silent}{whether to issue warnings or suppress them}
 }
 \value{
 returns a data frame or a list depending on the argument \sQuote{simplify} above.
 }
 \description{
-Like \code{\link{read_apsim}}, but it reads all .out files in a directory.
+Like \code{\link{read_apsim}}, but it can read many .out files in a directory. 
+It will read all of them unless these are filtered using a regular expression as an argument
+to \sQuote{value}.
 }
 \details{
 Read all APSIM generated .out files in a directory

@@ -104,6 +104,9 @@ optim_apsimx <- function(file, src.dir = ".",
     }
   }
   
+  ## Data needs to be a data.frame
+  if(!inherits(data, "data.frame"))
+    stop("Object 'data' should be of class 'data.frame'.", call. = FALSE)
   ## Setting up Date
   datami <- data[ ,-which(names(data) %in% index), drop = FALSE]
   if(any(grepl("Date", index))) data$Date <- as.Date(data$Date)
@@ -137,6 +140,9 @@ optim_apsimx <- function(file, src.dir = ".",
   
   ## Set up replacement
   if(missing(replacement)) replacement <- rep(FALSE, length(parm.paths))
+  
+  if(length(replacement) != length(parm.paths))
+    stop("Length of replacement vector should be equal to parm.paths", call. = FALSE)
   
   ## If root is not present
   if(missing(root)) root <- list("Models.Core.Replacements", NA)
@@ -251,6 +257,8 @@ optim_apsimx <- function(file, src.dir = ".",
       
       if(!is.null(data$report)) data$report <- as.factor(data$report)
       if(!is.null(sim$report)) sim$report <- as.factor(sim$report)
+      if(!is.null(sim$SimulationName)) sim$SimulationName <- as.factor(sim$SimulationName)
+      if(!is.null(data$SimulationName)) data$SimulationName <- as.factor(data$SimulationName)
       sim.s0 <- merge(sim, subset(data, select = index), by = index)  
       sim.s <- subset(sim.s0, select = names(data))
       ## However, they need to be in the exact same order

@@ -10,7 +10,7 @@
 #' @param src.dir directory containing the .apsimx file to be inspected; defaults to the current working directory
 #' @param node specific node to be inspected either \sQuote{Clock}, \sQuote{Weather}, 
 #' \sQuote{Soil}, \sQuote{SurfaceOrganicMatter}, \sQuote{MicroClimate}, \sQuote{Crop},
-#'  \sQuote{Manager} or \sQuote{Other}
+#'  \sQuote{Manager}, \sQuote{Operations} or \sQuote{Other}
 #' @param soil.child specific soil component to be inspected. The options vary depending on what is available (see details)
 #' @param parm parameter to refine the inspection of the \sQuote{manager} list(\sQuote{parm},\sQuote{position}), use \sQuote{NA} for all the positions. \sQuote{parm} can be a regular expression for partial matching.
 #' @param digits number of decimals to print (default 3). Not used now because everything is a character.
@@ -47,7 +47,7 @@
 #'
 
 inspect_apsimx <- function(file = "", src.dir = ".", 
-                           node = c("Clock", "Weather", "Soil", "SurfaceOrganicMatter", "MicroClimate", "Crop", "Manager","Report", "Other"),
+                           node = c("Clock", "Weather", "Soil", "SurfaceOrganicMatter", "MicroClimate", "Crop", "Manager","Report", "Operations", "Other"),
                            soil.child = c("Metadata", "Water", "InitialWater",
                                           "Chemical", "Physical", "Analysis", "SoilWater",
                                           "InitialN", "CERESSoilTemperature", "Sample",
@@ -219,7 +219,12 @@ inspect_apsimx <- function(file = "", src.dir = ".",
     }else{
       ## Pick which soil component we want to look at
       ## Which is not 'Metadata"
+      if(soil.child == "InitialWater") soil.child <- "Water"
+      
       wsc <- grep(soil.child, soil.children.names)
+      
+      if(soil.child == "Water" && length(wsc) == 2) wsc <- wsc[2]
+
       if(length(wsc) == 0) stop("soil.child likely not present")
     
       selected.soil.node.child <- soil.node[[1]]$Children[wsc]
@@ -240,7 +245,7 @@ inspect_apsimx <- function(file = "", src.dir = ".",
       cnms <- setdiff(names(selected.soil.node.child[[1]]), enms)
       ## print(names(selected.soil.node.child[[1]]))
       
-      if(soil.child == "Physical" || soil.child == "Water")
+      if(soil.child == "Physical")
         cnms <- c(cnms, "Crop LL", "Crop KL", "Crop XF")
         
       soil.d1 <- NULL
@@ -355,8 +360,14 @@ inspect_apsimx <- function(file = "", src.dir = ".",
     parm.path <- paste0(parm.path.2,".",som.node$Name)
     ## The relevant components might be unpredictable
     ## Will need to find a better method in the future
-    som.d <- data.frame(parm = names(som.node)[2:8],
-                        value = as.vector(unlist(som.node)[2:8]))
+    names.som.node0 <- names(som.node)
+    som.names.table <- c("InitialResidueName", "InitialResidueType", "InitialResidueMass",
+                         "InitialStandingFraction", "InitialCPR", "InitialCNR")
+    wsomnn <- names.som.node0 %in% som.names.table
+    values.som.node0 <- unlist(som.node)
+    wsomvn <- names(values.som.node0) %in% som.names.table
+    som.d <- data.frame(parm = names(som.node)[wsomnn],
+                        value = as.vector(values.som.node0[wsomvn]))
     
     if(missing(parm)){
       print(knitr::kable(som.d, digits = digits))  
@@ -371,13 +382,23 @@ inspect_apsimx <- function(file = "", src.dir = ".",
   
   if(node == "MicroClimate"){
     ## Which is 'MicroClimate'
+    ## This only works if it is under Field (old versions, before 2023-12-10)
     wmcn <- grepl("Models.MicroClimate", core.zone.node)
+    mcincz <- TRUE ## MicroClimate in core.zone
     if(all(wmcn == FALSE)){
-      stop("MicroClimate not found")
+      wmcnf <- function(x) grepl("Models.MicroClimate", x$`$type`)
+      wmcn <- sapply(parent.node, FUN = wmcnf)
+      mcincz <- FALSE
+      if(all(wmcn == FALSE))
+         stop("MicroClimate not found")
     }
-    microclimate.node <- core.zone.node[wmcn][[1]]
+    if(mcincz){
+      microclimate.node <- core.zone.node[wmcn][[1]]  
+    }else{
+      microclimate.node <- parent.node[wmcn][[1]]  
+    }
     
-    parm.path <- paste0(parm.path.2,".",microclimate.node$Name)
+    parm.path <- paste0(parm.path.2,".", microclimate.node$Name)
 
     microclimate.d <- data.frame(parm = names(microclimate.node)[2:9],
                                  value = as.vector(unlist(microclimate.node)[2:9]))
@@ -480,6 +501,38 @@ inspect_apsimx <- function(file = "", src.dir = ".",
     }
   }
   
+  if(node == "Operations"){
+    won <- grepl("Models.Operations", core.zone.node)
+    operations.node <- core.zone.node[won]
+    
+    if(length(operations.node) > 1)
+      stop("Not ready to handle multiple 'Operations'", call. = FALSE)
+    
+    if(is.null(operations.node[[1]]$Operation))
+      stop("'Operation' child node not found", call. = FALSE)
+    
+    len.op <- length(operations.node[[1]]$Operation)
+    op.mat <- matrix(nrow = len.op, ncol = 3,
+                     dimnames = list(NULL, c("Date", "Action", "Line")))
+    
+    for(i in seq_len(len.op)){
+      op.mat[i, ] <- c(operations.node[[1]]$Operation[[i]]$Date,
+                       operations.node[[1]]$Operation[[i]]$Action,
+                       operations.node[[1]]$Operation[[i]]$Line)
+    }
+    
+    if(is.null(parm)){
+      parm.path <- paste0(parm.path.2, ".Operations")
+      print(knitr::kable(as.data.frame(op.mat), digits = digits))
+    }else{
+      parm.path.3 <- paste0(parm.path.2, ".Operations")
+      parm.path <- paste(parm.path.3, parm[[1]], parm[[2]], sep = ".")
+      op.mat.dat <- as.data.frame(op.mat) 
+      op.mat.dat.parm <- op.mat.dat[parm[[1]], parm[[2]], drop = FALSE] 
+      print(knitr::kable(op.mat.dat.parm, digits = digits))
+    }
+  }
+  
   if(node == "Report"){
     wrn <- grepl("Models.Report", core.zone.node)
     if(all(wrn == FALSE)){
@@ -537,7 +590,7 @@ inspect_apsimx <- function(file = "", src.dir = ".",
        }
     }
   }
-  
+
   if(node == "Other"){
     
     tmp <- core.zone.node
@@ -572,7 +625,7 @@ inspect_apsimx <- function(file = "", src.dir = ".",
     }
   }
   
-  if(print.path && node != "Other"){
+  if(print.path && node != "Other" && node != "Operations"){
     if(!missing(parm)){
       if(length(parm) == 1){
         parm.path <- paste0(parm.path, ".", parm)
@@ -584,7 +637,7 @@ inspect_apsimx <- function(file = "", src.dir = ".",
     }
     cat("Parm path:", parm.path,"\n")
   }else{
-    if(print.path) cat("Parm path:", parm.path,"\n")
+    if(print.path) cat("Parm path:", parm.path,"\n")  
   }
   
   invisible(parm.path)

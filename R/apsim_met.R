@@ -1023,7 +1023,7 @@ pp_apsim_met <- function(metfile, lat, sun_angle=0){
 #' }
 #' 
 plot.met <- function(x, ..., years, met.var, 
-                     plot.type = c("ts", "area", "col"), 
+                     plot.type = c("ts", "area", "col", "density"), 
                      cumulative = FALSE,
                      facet = FALSE,
                      climatology = FALSE,
@@ -1042,7 +1042,7 @@ plot.met <- function(x, ..., years, met.var,
   ## Global variables?
   day <- NULL; cum.maxt <- NULL; Years <- NULL; cum.mint <- NULL;
   value <- NULL; temperature <- NULL; maxt <- NULL; mint <- NULL;
-  cum.met.var <- NULL; year <- NULL; 
+  cum.met.var <- NULL; year <- NULL; Year <- NULL
   ## Calculate climatology before subsetting years
   if(climatology){
     maxt.climatology <- stats::aggregate(maxt ~ day, data = x, FUN = mean)
@@ -1067,6 +1067,9 @@ plot.met <- function(x, ..., years, met.var,
     if(max(years) > max(x$year) || min(years) < min(x$year))
       stop("Selected year is not within the range of the data", call. = FALSE)    
   }
+
+  ## Need to make a copy for at least this case
+  if(plot.type == "density" && climatology) x2 <- x
 
   if(!missing(years)){
     x <- x[x$year %in% years,]
@@ -1223,7 +1226,48 @@ plot.met <- function(x, ..., years, met.var,
           }
         }
       }
-    }    
+    }   
+    ### Density could work with summary FALSE
+    if(plot.type == "density" && isFALSE(climatology) && isFALSE(cumulative)){
+      x <- as.data.frame(x)
+      if(missing(met.var)){
+        gp1 <- ggplot2::ggplot(data = x, 
+                        ggplot2::aes(x = maxt, color = Years)) + 
+          ggplot2::geom_density() + 
+          ggplot2::xlim(c(min(x$maxt) * 0.25, max(x$maxt) * 1.5)) + 
+          ggplot2::xlab("Maximum temperature (C)")
+        print(gp1)    
+      }else{
+        gp1 <- ggplot2::ggplot(data = x) + 
+          ggplot2::geom_density(ggplot2::aes(x = eval(parse(text = eval(met.var))), color = Years)) +
+          ggplot2::xlim(c(min(x[[met.var]]) * 0.25, max(x[[met.var]]) * 1.5)) + 
+          ggplot2::xlab(met.var)
+        print(gp1)    
+      }
+    }
+    ### If climatology is true
+    if(plot.type == "density" && climatology && isFALSE(cumulative)){
+      x <- as.data.frame(x)
+      if(missing(met.var)){
+        gp1 <- ggplot2::ggplot() + 
+          ggplot2::geom_density(data = x, ggplot2::aes(x = maxt, color = Years)) + 
+          ggplot2::geom_density(ggplot2::aes(x = maxt.climatology$maxt), linewidth = 2) + 
+          ggplot2::xlim(c(min(x$maxt) * 0.25, max(x$maxt) * 1.5)) + 
+          ggplot2::xlab("Maximum temperature (C)")
+        print(gp1)    
+      }else{
+        gp1 <- ggplot2::ggplot() + 
+          ggplot2::geom_density(data = x, ggplot2::aes(x = eval(parse(text = eval(met.var))), color = Years)) + 
+          ggplot2::geom_density(ggplot2::aes(x = met.var.climatology[[met.var]]), linewidth = 2) + 
+          ggplot2::xlim(c(min(met.var.climatology[[met.var]]) * 0.25, max(met.var.climatology[[met.var]]) * 1.5)) + 
+          ggplot2::xlab(met.var)
+        print(gp1)    
+      }
+    }
+    ### The cumulative does not make much sense
+    ### If summary is FALSE at least
+    if(plot.type == "density" && cumulative)
+      stop("This is plot.type is not available", call. = FALSE)
   }else{
     
     if(missing(met.var)){
@@ -1261,13 +1305,22 @@ plot.met <- function(x, ..., years, met.var,
     if(any(grepl("frost", met.var)))
       ylabs <- "Days"
       
-    stmp <- summary(x, ...)
+    if(plot.type == "density" && climatology){
+      stmp2 <- summary(x2, ...) 
+      tmp2 <- NULL
+      for(i in seq_along(met.var)){
+        dat2 <- data.frame(year = stmp2$year, met.var = met.var[i], value = stmp2[[met.var[i]]])
+        tmp2 <- rbind(tmp2, dat2)
+      }
+    }
+      
+    stmp <- summary(x, ...)      
     tmp <- NULL
     for(i in seq_along(met.var)){
       dat <- data.frame(year = stmp$year, met.var = met.var[i], value = stmp[[met.var[i]]])
       tmp <- rbind(tmp, dat)
     }
-    
+
     if(plot.type == "ts" && !climatology){
       gp1 <- ggplot2::ggplot(data = tmp, ggplot2::aes(x = year, y = value, color = met.var)) + 
         ggplot2::geom_point() + 
@@ -1299,6 +1352,49 @@ plot.met <- function(x, ..., years, met.var,
         ggplot2::ylab(ylabs)
       print(gp1)      
     }
+    
+    if(!climatology){
+      if(missing(years)){
+        if(plot.type == "density"){
+          gp1 <- ggplot2::ggplot(data = tmp, ggplot2::aes(x = value)) + 
+            ggplot2::geom_density() + 
+            ggplot2::xlim(c(min(tmp$value) * 0.5, max(tmp$value) * 1.5)) + 
+            ggplot2::xlab(ylabs)
+          print(gp1)      
+        }      
+      }else{
+        if(plot.type == "density"){
+          tmp$Year <- as.factor(tmp$year)
+          gp1 <- ggplot2::ggplot(data = tmp, ggplot2::aes(x = value)) + 
+            ggplot2::geom_density() +
+            ggplot2::geom_vline(ggplot2::aes(xintercept = value, color = Year)) + 
+            ggplot2::xlim(c(min(tmp$value) * 0.5, max(tmp$value) * 1.5)) + 
+            ggplot2::xlab(ylabs)
+          print(gp1)      
+        }
+      }      
+    }else{
+      if(missing(years)){
+        if(plot.type == "density"){
+          gp1 <- ggplot2::ggplot(data = tmp, ggplot2::aes(x = value)) + 
+            ggplot2::geom_density() + 
+            ggplot2::xlim(c(min(tmp$value) * 0.5, max(tmp$value) * 1.5)) + 
+            ggplot2::xlab(ylabs)
+          print(gp1)      
+        }      
+      }else{
+        if(plot.type == "density"){
+          tmp2$Year <- as.factor(tmp2$year)
+          tmp$Year <- as.factor(tmp$year)
+          gp1 <- ggplot2::ggplot(data = tmp2, ggplot2::aes(x = value)) + 
+            ggplot2::geom_density() +
+            ggplot2::geom_vline(data = tmp, ggplot2::aes(xintercept = value, color = Year)) + 
+            ggplot2::xlim(c(min(tmp2$value) * 0.5, max(tmp2$value) * 1.5)) + 
+            ggplot2::xlab(ylabs)
+          print(gp1)      
+        }
+      }
+    }
   }
   invisible(gp1)
 }
@@ -1326,7 +1422,7 @@ plot.met <- function(x, ..., years, met.var,
 #' ## This is also possible
 #' vp <- data.frame(vp = abs(rnorm(nrow(ames), 10)))
 #' attr(vp, "units") <- "(hPa)"
-#' ames$vp <- vp
+#' ames$vp <- vp$vp
 #' 
 #' ## This is needed to ensure that units and related attributes are also removed
 #' ames <- remove_column_apsim_met(ames, "vp")
@@ -1415,5 +1511,39 @@ remove_column_apsim_met <- function(met, name){
   attr(met, "units") <- attr(met, "units")[-which(names(met) == name)]   
   met[[name]] <- NULL
   attr(met, "colnames") <- names(met)
+  return(met)
+}
+
+#' This function can re-calculates annual mean monthly amplitude
+#' for an object of class \sQuote{met}
+#' @title Calculates attribute amp for an object of class \sQuote{met}
+#' @param met object of class \sQuote{met}
+#' @return an object of class \sQuote{met} with a recalculation of annual amplitude in mean monthly temperature 
+#' @export
+amp_apsim_met <- function(met){
+  
+  if(!inherits(met, "met"))
+    stop("Object should be of class 'met", call. = FALSE)
+  
+  ## Step 1: create date
+  date <- as.Date(paste(met$year, met$day, sep = "-"), format = "%Y-%j") 
+  ## Step 2: create month column
+  mnth <- as.numeric(format(date, "%m")) 
+  
+  met <- add_column_apsim_met(met = met, value = mnth, name = "month", units = "()")
+
+  mtemp <- (met$maxt + met$mint) / 2
+  met <- add_column_apsim_met(met = met, value = mtemp, name = "mean.temp", units = "(oC)")
+  
+  met.agg <- aggregate(mean.temp ~ mnth, data = met, FUN = mean)
+  
+  ans <- round(max(met.agg$mean.temp) - min(met.agg$mean.temp), 2)
+  
+  ## Clean up
+  met <- remove_column_apsim_met(met, "mean.temp")
+  met <- remove_column_apsim_met(met, "month")
+  
+  attr(met, "amp") <- paste("amp = ", ans)
+  
   return(met)
 }

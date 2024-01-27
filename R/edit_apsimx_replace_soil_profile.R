@@ -35,7 +35,7 @@ edit_apsimx_replace_soil_profile <-  function(file = "", src.dir = ".",
                                               edit.tag = "-edited",
                                               overwrite = FALSE,
                                               verbose = TRUE,
-                                              root){
+                                              root = NULL){
   
   .check_apsim_name(file)
   
@@ -61,7 +61,7 @@ edit_apsimx_replace_soil_profile <-  function(file = "", src.dir = ".",
   parent.node <- apsimx_json$Children
   wcore <- grep("Models.Core.Simulation", parent.node)
   
-  if(length(wcore) > 1){
+  if(length(wcore) > 1 || !is.null(root)){
     if(missing(root)){
       cat("Simulation structure: \n")
       str_list(apsimx_json)
@@ -168,7 +168,7 @@ edit_apsimx_replace_soil_profile <-  function(file = "", src.dir = ".",
   wschn <- grepl("Models.Soils.Chemical", soil.node0)
   soil.chemical.node <- soil.node0[wschn][[1]]
   
-  for(i in c("Depth", "Thickness", "NO3N", "NH4N", "PH")){
+  for(i in c("Depth", "Thickness", "PH")){
     ## Format the variable
     tmp <- as.vector(soil.profile$soil[[i]], mode = "list")
     ## Replace the variable
@@ -177,6 +177,21 @@ edit_apsimx_replace_soil_profile <-  function(file = "", src.dir = ".",
   soil.node0[wschn][[1]] <- soil.chemical.node
   soil.node[[1]]$Children <- soil.node0
   
+  ## Next edit the Solute component, this is not present in older versions of APSIM
+  wssoln <- grepl("Models.Soils.Solute", soil.node0)
+  if(sum(wssoln) > 0){
+    soil.solute.node <- soil.node0[wssoln][[1]]
+    
+    for(i in c("Depth", "Thickness", "NO3N", "NH4N")){
+      ## Format the variable
+      tmp <- as.vector(soil.profile$soil[[i]], mode = "list")
+      ## Replace the variable
+      soil.solute.node[[i]] <- tmp 
+    }
+    soil.node0[wssoln][[1]] <- soil.solute.node
+    soil.node[[1]]$Children <- soil.node0    
+  }
+
   ## Edit metadata
   if(!is.null(soil.profile$metadata)){
     soil.node.names <- names(soil.node[[1]])
@@ -216,6 +231,21 @@ edit_apsimx_replace_soil_profile <-  function(file = "", src.dir = ".",
     soil.node[[1]]$Children <- soil.node0
   }
   
+  ## Edit InitialWater if present
+  if(inherits(soil.profile$initialwater, "initialwater_parms")){
+    
+    wsiswn <- grepl("Models.Soils.Water", soil.node0) 
+    soil.initialwater.node <- soil.node0[wsiswn][[1]]
+    for(i in names(soil.profile$initialwater)){
+      if(any(is.na(soil.profile$initialwater[[i]]))){
+        next
+      }else{
+        soil.initialwater.node[[i]] <- soil.profile$initialwater[[i]]  
+      } 
+    }
+    soil.node0[wsiswn][[1]] <- soil.initialwater.node
+    soil.node[[1]]$Children <- soil.node0
+  }
   
   if(missing(root)){
     ## Replace the soil

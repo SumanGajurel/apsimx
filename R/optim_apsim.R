@@ -105,6 +105,10 @@ optim_apsim <- function(file, src.dir = ".",
     }
   }
   
+  ## Data needs to be a data.frame
+  if(!inherits(data, "data.frame"))
+    stop("Object 'data' should be of class 'data.frame'.", call. = FALSE)
+  
   ## Index can now potentially reference two columns
   datami <- data[,-which(names(data) %in% index), drop = FALSE]
   if(any(grepl("Date", index))) data$Date <- as.Date(data$Date)
@@ -236,7 +240,7 @@ optim_apsim <- function(file, src.dir = ".",
       stop("the apsim simulation should return an object of class 'data.frame'. \n 
            Check that the output does simplify to a 'data.frame' instead of a 'list'.")
     
-    if("outfile" %in% names(sim) && index == "Date")
+    if("outfile" %in% names(sim) && length(index) == 1)
       stop("If you have multiple simulations, you should modify the index argument. \n
            It is possible that 'index = c('outfile', 'Date')' might work.")
     
@@ -245,14 +249,14 @@ optim_apsim <- function(file, src.dir = ".",
     if(!all(names(data) %in% names(sim))) 
       stop("names in 'data' do not match names in simulation")
     
-    if(length(index) == 1 && index == "Date"){
+    if(length(index) == 1 && index[1] == "Date"){
       sim.s <- subset(sim, sim$Date %in% data[[index]], select = names(data))  
       
-      sim.s <- sim.s[order(sim.s[, index[1]]),]
-      data <- data[order(data[, index[1]]),]
+      sim.s <- sim.s[order(sim.s[, index]),]
+      data <- data[order(data[, index]),]
       
-      if(!all(sim.s[[index[1]]] == data[[index[1]]]))
-        stop(paste("simulations and data for", index[1], "do not match"))   
+      if(!all(sim.s[[index]] == data[[index]]))
+        stop(paste("simulations and data for", index, "do not match"))   
       
     }else{
       if(!is.null(data$outfile)) data$outfile <- as.factor(data$outfile)

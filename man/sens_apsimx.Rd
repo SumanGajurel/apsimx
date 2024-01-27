@@ -15,10 +15,12 @@ sens_apsimx(
   summary = c("mean", "max", "var", "sd", "none"),
   root,
   verbose = TRUE,
+  cores = 1L,
+  save = FALSE,
   ...
 )
 
-\method{summary}{sens_apsim}(object, ..., scale = FALSE, select = "all")
+\method{summary}{sens_apsim}(object, ..., scale = FALSE, select = "all", warning = TRUE)
 }
 \arguments{
 \item{file}{file name to be run (the extension .apsimx is optional)}
@@ -43,6 +45,12 @@ the \sQuote{replacement} component. Its length should be equal to the length or 
 
 \item{verbose}{whether to print progress in percent and elapsed time.}
 
+\item{cores}{number of cores to use for parallel evaluation}
+
+\item{save}{whether to save intermediate results. By default they will be saved as a
+\sQuote{csv} file using the name of the apsim file. This will replace \sQuote{apsimx} with \sQuote{csv}.
+It is also possible to provide the file name here (for example: \sQuote{Some_results.csv}).}
+
 \item{...}{additional arguments (none used at the moment)}
 
 \item{object}{object of class \sQuote{sens_apsim}}
@@ -52,6 +60,8 @@ default is FALSE as some inputs might be characters or factors. In this
 case all inputs will be treated as factors in the sum of squares decomposition.}
 
 \item{select}{option for selecting specific variables in the APSIM output. It will be treated as a regular expression}
+
+\item{warning}{whether to issue a warning when applying this function to an object which has not been summarized}
 }
 \value{
 object of class \sQuote{sens_apsim}, but really just a list with results from the evaluations.

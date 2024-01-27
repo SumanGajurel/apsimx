@@ -53,10 +53,15 @@ compare_apsim <- function(...,
   if(!missing(labels)){
     o.nms <- labels
     if(length(labels) != n.outs)
-      stop(" 'labels' lenght should be the same as the number of 'output' objects")
+      stop(" 'labels' lenght should be the same as the number of 'output' objects", call. = FALSE)
   } 
   
-  if(!inherits(out1, "data.frame")) stop("object should be of class 'data.frame' ")
+  if(!inherits(out1, "data.frame")) stop("object should be of class 'data.frame' ", call. = FALSE)
+  
+  if(!missing(variable)){
+    if(length(variable) > 1) 
+      stop("Only one variable can be selected", call. = FALSE)    
+  }
 
   ## Process out1
   nms1 <- names(out1)
@@ -73,6 +78,16 @@ compare_apsim <- function(...,
     stop("'report' and 'Date' found in first data frame but index length is equal to 1.
          Maybe index should be c('report', 'Date')?", call. = FALSE)
   }
+  
+  if(all(c("outfile", "Date") %in% nms1) && length(index) == 1){
+    stop("'outfile' and 'Date' found in first data frame but index length is equal to 1.
+         Maybe index should be c('outfile', 'Date')?", call. = FALSE)
+  }
+  
+  if(all(c("SimulationName", "Date") %in% nms1) && length(index) == 1){
+    stop("'SimulationName' and 'Date' found in first data frame but index length is equal to 1.
+         Maybe index should be c('SimulationName', 'Date')?", call. = FALSE)
+  }
 
   if(length(index) == 1){
     if(length(nms1.i) < 2) 
@@ -83,7 +98,17 @@ compare_apsim <- function(...,
   }
 
   ## The line below drops irrelevant columns and brings index to the first column
-  out1 <- subset(out1, select = c(index, nms1.i[-which(nms1 %in% index)]))
+  ##out1 <- subset(out1, select = c(index, nms1.i[-which(nms1 %in% index)]))
+  out1 <- subset(out1, select = c(index, setdiff(nms1.i, index)))
+
+  ### Drop character or factor variables which are not in index
+  which.var.not.numeric <- sapply(subset(out1, select = setdiff(nms1.i, index)), is.numeric) 
+  ### Remove non-numeric variables and throw warning if verbose
+  if(any(isFALSE(which.var.not.numeric))){
+    out1 <- out1[, -c(which(which.var.not.numeric == 0) + length(index))]
+    if(verbose) warning("Removed non-numeric non-index variables from first data.frame")
+  }
+  
   new.nms1 <- paste0(names(out1), ".1") ## This simply adds a 1
   if(length(index) == 1){
     out1.new.names <- gsub(paste0(index, ".1"), index, new.nms1) ## Rename Date.1 to Date  
@@ -172,7 +197,7 @@ compare_apsim <- function(...,
   
   if(!missing(variable)){
     ## Just select the appropriate variable
-    idx.out.mrg <- grep(variable, names(out.mrg))
+    idx.out.mrg <- grep(variable, names(out.mrg))  
     out.mrg.s <- out.mrg[, idx.out.mrg]
     
     if(verbose) cat("Variable:", variable, "\n")
@@ -229,14 +254,14 @@ print.out_mrg <- function(x, ..., digits = 2){
 
 #' The by and facet arguments are only available for plot.type vs and ts for now
 #' 
-#' Plotting function for weather data
+#' Plotting function for observed and simulated data
 #' @rdname compare_apsim
 #' @description plotting function for compare_apsim, it requires ggplot2
 #' @param x object of class \sQuote{out_mrg}
 #' @param ... data frames with APSIM output or observed data. 
 #' @param plot.type either \sQuote{vs}, \sQuote{diff}, \sQuote{ts} - for time series or \sQuote{density}
 #' @param pairs pair of objects to compare, defaults to 1 and 2 but others are possible
-#' @param cumulative whether to plot cummulative values (default FALSE)
+#' @param cumulative whether to plot cumulative values (default FALSE)
 #' @param variable variable to plot 
 #' @param id identification (not implemented yet)
 #' @param by variable in \sQuote{index} used for plotting
@@ -356,9 +381,17 @@ plot.out_mrg <- function(x, ..., plot.type = c("vs", "diff", "ts", "density"),
     prs0 <- paste0(variable, ".", pairs)
     prs <- paste0(prs0, collapse = "|")
     tmp <- x[, grep(prs, names(x))]
-    tmp[[index]] <- x[[index]] ## Put it back in - kinda dumb 
+    if(length(index) == 1){
+      tmp[[index]] <- x[[index]] ## Put it back in - kinda dumb   
+    }else{
+      if(index[2] == 'Date'){
+        tmp[[index[2]]] <- x[[index[2]]] ## Put it back in - kinda dumb   
+      }else{
+        stop("I have not implemented this yet", call. = FALSE)
+      }
+    }
     
-    gp1 <- ggplot2::ggplot(data = tmp, ggplot2::aes(x = .data[[index]], 
+    gp1 <- ggplot2::ggplot(data = tmp, ggplot2::aes(x = .data[[index[1]]], 
                                                     y = eval(parse(text = eval(prs0[1]))),
                                                     color = paste(o.nms[pairs[1]], prs0[1]))) +
       
@@ -406,6 +439,9 @@ plot.out_mrg <- function(x, ..., plot.type = c("vs", "diff", "ts", "density"),
   }
     
   if(plot.type == "ts" && cumulative){
+    
+    if(length(index) != 1)
+      stop("I have only implemented this when 'index' length is equal to 1")
     
     prs0 <- paste0(variable, ".", pairs)
     prs <- paste0(prs0, collapse = "|")

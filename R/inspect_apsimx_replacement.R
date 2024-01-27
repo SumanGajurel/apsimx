@@ -15,7 +15,9 @@
 #' Do not use this and also the other node arguments. This argument will
 #' overwrite the other node specifications.
 #' @param root \sQuote{root} for the inspection of a replacement file (it gives flexibility to inspect other types of files).
-#' @param parm specific parameter to display
+#' In previous versions of APSIM (before mid 2023) this was \sQuote{Models.Core.Replacement}. In more recent versions, it needs
+#' to be \sQuote{Models.Core.Folder}.
+#' @param parm specific parameter to display. It can be a regular expression.
 #' @param display.available logical. Whether to display available components to be inspected (default = FALSE)
 #' @param digits number of decimals to print (default 3)
 #' @param print.path print the path to the inspected parameter (default FALSE)
@@ -79,6 +81,14 @@ inspect_apsimx_replacement <- function(file = "", src.dir = ".",
   ## Select Replacements node
   frn <- grep(root[[1]], apsimx_json$Children, fixed = TRUE)
   
+  if(length(frn) == 0){
+    ### Here we try a different root
+    root <- list('Models.Core.Folder', NA)
+    frn <- grep(root[[1]], apsimx_json$Children, fixed = TRUE)  
+    if(length(frn) == 0)
+      stop("Could not find 'root' for replacements", call. = FALSE)
+  }
+  
   if(!missing(grep.options)){
     gfixed <- grep.options$fixed
     gignore.case <- grep.options$ignore.case
@@ -119,6 +129,11 @@ inspect_apsimx_replacement <- function(file = "", src.dir = ".",
     }
   }else{
     replacements.node <- apsimx_json$Children[[frn]]
+  }
+  
+  if(verbose){
+    if(!grepl("replace", replacements.node$Name, ignore.case = TRUE))
+      warning("Node does not appear to be a 'Replacements' node")
   }
   
   parm.path.0.1 <- paste0(parm.path.0, ".", replacements.node$Name)
@@ -566,7 +581,7 @@ unpack_node <- function(x, parm = NULL, display.available = FALSE){
       if(length(node.child) == 1 & length(x[[i]]) > 1){
         ## This is an element such as 'Command'
         tcp <- try(cat_parm(x[[i]], parm = parm), silent = TRUE)
-        if(class(tcp) != "try-error"){
+        if(!inherits(tcp, "try-error")){
           cat(names(node.child), "\n")
           tcp
         }else{

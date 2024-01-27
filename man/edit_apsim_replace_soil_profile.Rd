@@ -11,9 +11,11 @@ edit_apsim_replace_soil_profile(
   soil.profile = NULL,
   swim = NULL,
   soilwat = NULL,
+  initialwater = NULL,
   edit.tag = "-edited",
   overwrite = FALSE,
-  verbose = TRUE
+  verbose = TRUE,
+  root
 )
 }
 \arguments{
@@ -29,11 +31,15 @@ edit_apsim_replace_soil_profile(
 
 \item{soilwat}{list with SoilWat specific parameters}
 
+\item{initialwater}{list with InitialWater specific parameters}
+
 \item{edit.tag}{default edit tag \sQuote{-edited}}
 
 \item{overwrite}{default FALSE}
 
 \item{verbose}{default TRUE. Will print messages indicating what was done.}
+
+\item{root}{supply the node postion in the case of multiple simulations such as factorials.}
 }
 \value{
 writes an APSIM file to disk with the supplied soil profile

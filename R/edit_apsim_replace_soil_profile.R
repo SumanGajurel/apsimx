@@ -8,9 +8,11 @@
 #' @param soil.profile a soil profile object with class \sQuote{soil_profile}
 #' @param swim list with SWIM specific parameters
 #' @param soilwat list with SoilWat specific parameters
+#' @param initialwater list with InitialWater specific parameters
 #' @param edit.tag default edit tag \sQuote{-edited}
 #' @param overwrite default FALSE
 #' @param verbose default TRUE. Will print messages indicating what was done.
+#' @param root supply the node postion in the case of multiple simulations such as factorials.
 #' @return writes an APSIM file to disk with the supplied soil profile
 #' @details This function is designed to batch replace the whole soil in an APSIM simulation. 
 #' @note There is no such thing as a default soil, carefully build the profile for each simulation.
@@ -43,15 +45,17 @@ edit_apsim_replace_soil_profile <-  function(file = "", src.dir = ".",
                                              soil.profile = NULL,
                                              swim = NULL,
                                              soilwat = NULL,
+                                             initialwater = NULL,
                                              edit.tag = "-edited",
                                              overwrite = FALSE,
-                                             verbose = TRUE){
+                                             verbose = TRUE,
+                                             root){
   
   .check_apsim_name(file)
   
   if(missing(wrt.dir)) wrt.dir <- src.dir
   
-  file.names <- dir(path = src.dir, pattern=".apsim$",ignore.case=TRUE)
+  file.names <- dir(path = src.dir, pattern=".apsim$", ignore.case=TRUE)
   
   if(length(file.names)==0){
     stop("There are no .apsim files in the specified directory to edit.")
@@ -74,7 +78,8 @@ edit_apsim_replace_soil_profile <-  function(file = "", src.dir = ".",
                  edit.tag = "-tmp",
                  parm = i, value = soil.profile$soil[[i]],
                  check.length = FALSE,
-                 verbose = verbose)
+                 verbose = verbose,
+                 root = root)
     }else{
       new.file.path <- paste0(tools::file_path_sans_ext(file),"-tmp.apsim")
 
@@ -83,13 +88,14 @@ edit_apsim_replace_soil_profile <-  function(file = "", src.dir = ".",
                  overwrite = TRUE,
                  parm = i, value = soil.profile$soil[[i]],
                  check.length = FALSE,
-                 verbose = verbose)
+                 verbose = verbose,
+                 root = root)
     }
     k <- k + 1
   }
   
   ## Edit soil water parameters
-  if(!missing(soilwat) || !is.na(soil.profile$soilwat)){
+  if(!is.null(soilwat) || !all(is.na(soil.profile$soilwat))){
     if(!inherits(soilwat, "soilwat_parms")) stop("object should be of class 'soilwat_parms'")
     
     for(i in seq_along(soilwat)){
@@ -99,11 +105,12 @@ edit_apsim_replace_soil_profile <-  function(file = "", src.dir = ".",
       edit_apsim(file = new.file.path, src.dir = ".", wrt.dir = ".",
                  node = "Soil", soil.child = "Water", 
                  overwrite = TRUE, parm = names(soilwat[i]),
-                 value = prm.vl)
+                 value = prm.vl,
+                 root = root)
     }
   }
   
-  if(!missing(swim) || !is.na(soil.profile$swim)){
+  if(!is.null(swim) || !all(is.na(soil.profile$swim))){
     if(!inherits(swim, "swim_parms")) stop("object should be of class 'swim_parms'")
     
     for(i in seq_along(swim)){
@@ -119,7 +126,26 @@ edit_apsim_replace_soil_profile <-  function(file = "", src.dir = ".",
       edit_apsim(file = new.file.path, src.dir = ".", wrt.dir = ".",
                  node = "Soil", soil.child = "SWIM", 
                  overwrite = TRUE, parm = prm.nm,
-                 value = prm.vl)
+                 value = prm.vl,
+                 root = root)
+    }
+  }
+  
+  ## Edit Initial Water
+  if(!is.null(initialwater) || !all(is.na(soil.profile$initialwater))){
+    if(!inherits(initialwater, "initialwater_parms")) stop("object should be of class 'initialwater_parms'")
+    
+    for(i in seq_along(initialwater)){
+      prm.vl <- initialwater[[i]]
+      if(is.na(prm.vl)) next
+
+      prm.nm <- names(initialwater[i])
+      
+      edit_apsim(file = new.file.path, src.dir = ".", wrt.dir = ".",
+                 node = "Soil", soil.child = "InitialWater", 
+                 overwrite = TRUE, parm = prm.nm,
+                 value = prm.vl,
+                 root = root)
     }
   }
   
@@ -137,7 +163,8 @@ edit_apsim_replace_soil_profile <-  function(file = "", src.dir = ".",
                  node = "Soil", soil.child = "Metadata", 
                  overwrite = TRUE, 
                  parm = prm.nm,
-                 value = prm.vl)
+                 value = prm.vl,
+                 root = root)
     }
   }
   
@@ -153,7 +180,8 @@ edit_apsim_replace_soil_profile <-  function(file = "", src.dir = ".",
              overwrite = TRUE,
              parm = ii, value = soil.profile$soil[[i]],
              check.length = FALSE,
-             verbose = verbose)
+             verbose = verbose,
+             root = root)
   }
   
   ## Edit Analysis PH
@@ -164,14 +192,16 @@ edit_apsim_replace_soil_profile <-  function(file = "", src.dir = ".",
                  overwrite = TRUE,
                  parm = i, value = rep(0, nrow(soil.profile$soil)),
                  check.length = FALSE,
-                 verbose = verbose)
+                 verbose = verbose,
+                 root = root)
     }else{
       edit_apsim(file = new.file.path, src.dir = ".", wrt.dir = ".", 
                  node = "Soil", soil.child = "Analysis", 
                  overwrite = TRUE,
                  parm = i, value = soil.profile$soil[[i]],
                  check.length = FALSE,
-                 verbose = verbose)
+                 verbose = verbose,
+                 root = root)
     }
   }
   
@@ -186,7 +216,8 @@ edit_apsim_replace_soil_profile <-  function(file = "", src.dir = ".",
              overwrite = TRUE,
              parm = ii, value = soil.profile$soil[[i]],
              check.length = FALSE,
-             verbose = verbose)
+             verbose = verbose,
+             root = root)
   }
   
   ## Parse apsim file (XML), but the -tmp one
@@ -197,7 +228,17 @@ edit_apsim_replace_soil_profile <-  function(file = "", src.dir = ".",
   unlink(new.file.path)
   
   ## Print names of crops present in the original file
-  crop.names <- xml2::xml_attr(xml2::xml_find_all(apsim_xml, ".//Soil/Water/SoilCrop"), "name")
+  if(missing(root)){
+    crop.names <- xml2::xml_attr(xml2::xml_find_all(apsim_xml, ".//Soil/Water/SoilCrop"), "name")  
+  }else{
+    apsim_xml0 <- xml2::xml_find_all(apsim_xml, ".//simulation")
+    sim.names <- unlist(xml2::xml_attrs(apsim_xml0))
+    wsim <- grep(root, sim.names)
+    root_node_ptr <- apsim_xml0[[wsim]]
+    root_node_path <- xml2::xml_path(root_node_ptr)
+    root_node <- xml2::xml_find_first(apsim_xml, root_node_path)
+    crop.names <- xml2::xml_attr(xml2::xml_find_all(root_node, ".//Soil/Water/SoilCrop"), "name")  
+  }
   
   if(verbose) cat("Crops in the original file", crop.names, "\n")
 
@@ -205,6 +246,7 @@ edit_apsim_replace_soil_profile <-  function(file = "", src.dir = ".",
       cat("Name of crops in soil profile", soil.profile$crops,"\n")
       cat("Name of crops in APSIM file", crop.names,"\n")
       stop("Names of crops are not the same")
+      ##cat("Names of crops are not the same")
   }
   
   soil.crops.node <- xml2::xml_find_all(apsim_xml, ".//Soil/Water/SoilCrop")
@@ -212,7 +254,12 @@ edit_apsim_replace_soil_profile <-  function(file = "", src.dir = ".",
   for(crop in soil.profile$crops){
     crop.index <- which(crop.names == crop)
     for(j in c("Thickness", "XF", "LL", "KL")){
-      crop.specific.node <- xml2::xml_find_first(xml2::xml_find_all(apsim_xml, ".//Soil/Water/SoilCrop")[[crop.index]], paste0("./",j))
+      
+      if(missing(root)){
+        crop.specific.node <- xml2::xml_find_first(xml2::xml_find_all(apsim_xml, ".//Soil/Water/SoilCrop")[[crop.index]], paste0("./", j))  
+      }else{
+        crop.specific.node <- xml2::xml_find_first(xml2::xml_find_all(root_node, ".//Soil/Water/SoilCrop")[[crop.index]], paste0("./", j))  
+      }
       
       len.child.crop.specific.node <- length(xml2::xml_children(crop.specific.node))
       rows.soil.profile <- nrow(soil.profile$soil)
@@ -234,7 +281,8 @@ edit_apsim_replace_soil_profile <-  function(file = "", src.dir = ".",
       }else{
         jj <- j
       }
-      
+      # print(jj)
+      # print(as.character(soil.profile$soil[[jj]]))
       xml2::xml_set_text(xml2::xml_children(crop.specific.node), as.character(soil.profile$soil[[jj]]))
     }
   }
@@ -249,7 +297,7 @@ edit_apsim_replace_soil_profile <-  function(file = "", src.dir = ".",
   xml2::write_xml(apsim_xml, file = wr.path)
   
   if(verbose){
-    cat("Created ",wr.path,"\n")
+    cat("Created ", wr.path,"\n")
   }
 }
 
@@ -392,6 +440,39 @@ soilorganicmatter_parms <- function(RootCN = NA, RootWt = NA, EnrACoeff = NA, En
   if(!is.na(EnrBCoeff) && EnrBCoeff <= 0) warning("EnrBCoeff should be a value greater than zero")
   
   ans <- structure(som.list, class = c("soilorganicmatter_parms","list"))
+  ans
+  
+}
+
+#'
+#' @title Helper function to supply additional Initial Soil Water parameters
+#' @name initialwater_parms
+#' @description Creates a list with specific components for the Initial Soil Water module
+#' @param Depth depth for soil layers (see APSIM documentation)
+#' @param Thickness soil thickness for layers (either enter Depth or Thickness, but not both)
+#' @param InitialValues initial values of soil water
+#' @param InitialPAWmm Initial Plant Available Water in mm
+#' @param PercentFull Percent full (0 - 100)
+#' @param RelativeTo usually LL15
+#' @param FilledFromTop either true or false
+#' @param DepthWetSoil depth of wet soil in mm
+#' @export
+
+initialwater_parms <- function(Depth = NA, Thickness = NA, InitialValues = NA, InitialPAWmm = NA, 
+                               PercentFull = NA, RelativeTo = NA, FilledFromTop = NA, DepthWetSoil = NA){
+  
+  initialwater.list <- list(Depth = Depth, Thickness = NA, InitialValues = InitialValues, 
+                            InitialPAWmm = InitialPAWmm, PercentFull = PercentFull, 
+                            FilledFromTop = FilledFromTop, RelativeTo = RelativeTo, 
+                            DepthWetSoil = DepthWetSoil)
+  
+  if(!is.na(InitialPAWmm) && InitialPAWmm <= 0) warning("InitialPAWmm should be a value greater than zero") 
+  if(!is.na(PercentFull) && PercentFull <= 0) warning("PercentFull should be a value greater than zero")
+  if(!is.na(PercentFull) && PercentFull > 100) warning("PercentFull should be a value of less than 100")
+  if(!is.na(DepthWetSoil) && DepthWetSoil <= 0) warning("DepthWetSoil should be a value greater than zero")
+  if(!is.na(Thickness) && any(Thickness < 0)) warning("Thickness values should be greater than zero")
+  
+  ans <- structure(initialwater.list, class = c("initialwater_parms","list"))
   ans
   
 }

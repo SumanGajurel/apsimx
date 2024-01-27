@@ -19,6 +19,9 @@
 #' @param soil.profile a soil profile to fill in in case the default one is not appropriate
 #' @param find.location.name default is TRUE. Use either maps package or photon API to find Country/State.
 #' If you are running this function many times it might be better to set this to FALSE.
+#' @param fix whether to fix compatibility between saturation and bulk density (default is FALSE).
+#' @param verbose argument passed to the fix function.
+#' @param xargs additional arguments passed to \code{\link{apsimx_soil_profile}} function.
 #' @return it generates an object of class \sQuote{soil_profile}.
 #' @details Variable which are directly retrieved and a simple unit conversion is performed: \cr
 #' * Bulk density - bdod \cr
@@ -40,7 +43,7 @@
 #' @examples 
 #' \dontrun{
 #' ## Get soil profile properties for a single point
-#' sp1 <- get_isric_soil_profile(lonlat = c(-93, 42))
+#' sp1 <- get_isric_soil_profile(lonlat = c(-93, 42), fix = TRUE, verbose = FALSE)
 #' 
 #' ## Visualize
 #' plot(sp1)
@@ -52,10 +55,13 @@
 get_isric_soil_profile <- function(lonlat, 
                                    statistic = c("mean", "Q0.5"),
                                    soil.profile,
-                                   find.location.name = TRUE){
+                                   find.location.name = TRUE,
+                                   fix = FALSE,
+                                   verbose = TRUE,
+                                   xargs = NULL){
 
   statistic <- match.arg(statistic)
-
+  
   #### Create extent step ####
   lon <- as.numeric(lonlat[1])
   lat <- as.numeric(lonlat[2])
@@ -72,7 +78,8 @@ get_isric_soil_profile <- function(lonlat,
                            "property=clay", 
                            "property=sand", 
                            "property=nitrogen",
-                           "property=cec", sep = "&")
+                           "property=cec", 
+                           "property=wv1500", sep = "&")
   rest.depths <- paste("&depth=0-5cm", "depth=0-30cm", "depth=5-15cm", 
                        "depth=15-30cm", "depth=30-60cm", "depth=60-100cm", "depth=100-200cm", sep = "&")
   rest.statistic <- paste("&value", statistic, sep = "=")
@@ -82,9 +89,9 @@ get_isric_soil_profile <- function(lonlat,
   #### Process query
   sp.nms <- rest.data$properties$layers[["name"]]
   
-  if(!identical(sp.nms, c("bdod", "cec", "clay", "nitrogen", "phh2o", "sand", "soc"))){
+  if(!identical(sp.nms, c("bdod", "cec", "clay", "nitrogen", "phh2o", "sand", "soc", "wv1500"))){
     cat("Found these properties", sp.nms, "\n")
-    cat("Expected these properties", c("bdod", "cec", "clay", "nitrogen", "phh2o", "sand", "soc"), "\n")
+    cat("Expected these properties", c("bdod", "cec", "clay", "nitrogen", "phh2o", "sand", "soc", "wv1500"), "\n")
     stop("soil properties names do not match")
   }
     
@@ -95,6 +102,7 @@ get_isric_soil_profile <- function(lonlat,
   phh2o <- rest.data$properties$layers[5,3][[1]][,3]
   sand <- rest.data$properties$layers[6,3][[1]][,3]
   soc <- rest.data$properties$layers[7,3][[1]][,3]
+  wv1500 <- rest.data$properties$layers[8,3][[1]][,3]
   
   if(any(is.na(soc))) stop("No soil data available for this location. Did you specify the coordinates correctly?")
 
@@ -113,10 +121,18 @@ get_isric_soil_profile <- function(lonlat,
     soil_profile$soil$DUL <- NA
     soil_profile$soil$LL15 <- NA
     soil_profile$soil$SAT <- NA
+    
   }else{
     ## stop("This is not fully implemented yet. Submit a github issue if you need it.", call. = FALSE)
     soil_profile <- soil.profile
     new.soil <- TRUE
+  }
+  
+  ### If additional arguments are present
+  if(!is.null(xargs)){
+    if(!is.null(xargs$crops)){
+      soil_profile$crops <- xargs$crops
+    }
   }
 
   ### For some of the conversions see: https://www.isric.org/explore/soilgrids/faq-soilgrids
@@ -168,24 +184,34 @@ get_isric_soil_profile <- function(lonlat,
   ## The soil texture class will be based on the first layer only
   txt_clss <- texture_class(soil_profile$soil$ParticleSizeClay[1] * 1e-2, soil_profile$soil$ParticleSizeSilt[1] * 1e-2)
   t2sp <- texture2soilParms(txt_clss)
-  soil_profile$soilwat <- soilwat_parms(Salb = t2sp$Albedo, CN2Bare = t2sp$CN2, 
-                                        SWCON = rep(t2sp$SWCON, nrow(soil_profile$soil)),
-                                        Thickness = thcknss)
   
-  if(requireNamespace("maps", quietly = TRUE)){
-    country <- maps::map.where(x = lon, y = lat)
-    if(country == "USA"){
-      state <- toupper(maps::map.where(database = "county", x = lon, y = lat)) 
+  if(missing(soil.profile) || (!missing(soil.profile) && !is.list(soil.profile$soilwat))){
+    soil_profile$soilwat <- soilwat_parms(Salb = t2sp$Albedo, CN2Bare = t2sp$CN2, 
+                                          SWCON = rep(t2sp$SWCON, nrow(soil_profile$soil)),
+                                          Thickness = thcknss)    
+  }
+  
+  ### Passing the initial soil water?
+  isw <- initialwater_parms(Thickness = thcknss, InitialValues = wv1500 * 1e-3)
+  
+  soil_profile$initialwater <- isw
+
+  if(find.location.name){
+    if(requireNamespace("maps", quietly = TRUE)){
+      country <- maps::map.where(x = lon, y = lat)
+      if(country == "USA"){
+        state <- toupper(maps::map.where(database = "county", x = lon, y = lat)) 
+      }else{
+        url <- paste0("https://photon.komoot.io/reverse?lon=", lon, "&lat=", lat)
+        fgeo <- jsonlite::fromJSON(url)
+        state <- fgeo$feature$properties$state
+      }
     }else{
       url <- paste0("https://photon.komoot.io/reverse?lon=", lon, "&lat=", lat)
       fgeo <- jsonlite::fromJSON(url)
       state <- fgeo$feature$properties$state
-    }
-  }else{
-    url <- paste0("https://photon.komoot.io/reverse?lon=", lon, "&lat=", lat)
-    fgeo <- jsonlite::fromJSON(url)
-    state <- fgeo$feature$properties$state
-    country <- fgeo$features$properties$country
+      country <- fgeo$features$properties$country
+    }    
   }
 
   #### Attributes ####
@@ -204,6 +230,8 @@ get_isric_soil_profile <- function(lonlat,
                           "- geomdesc =", NA)
   
   soil_profile$metadata <- alist
+  
+  if(fix) soil_profile <- fix_apsimx_soil_profile(soil_profile, verbose = verbose)
   
   check_apsimx_soil_profile(soil_profile)
   

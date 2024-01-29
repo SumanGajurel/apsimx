@@ -2,9 +2,9 @@
 
 require(apsimx)
 
-apsimx_options(warn.versions = FALSE,
-               exe.path = "/Applications/APSIM2022.6.7044.0.app/Contents/Resources/bin/Models",
-               examples.path = "/Applications/APSIM2022.6.7044.0.app/Contents/Resources/Examples")
+# apsimx_options(warn.versions = FALSE,
+#                exe.path = "/Applications/APSIM2022.6.7044.0.app/Contents/Resources/bin/Models",
+#                examples.path = "/Applications/APSIM2022.6.7044.0.app/Contents/Resources/Examples")
 
 run.insert <- get(".run.local.tests", envir = apsimx.options)
 
@@ -13,11 +13,10 @@ run.insert <- FALSE
 
 tmp.dir <- tempdir()
 extd.dir <- system.file("extdata", package = "apsimx")
-ex.dir <- auto_detect_apsimx_examples()
 
 if(run.insert){
   
-##   setwd("~/Dropbox/apsimx/tests")
+  ex.dir <- auto_detect_apsimx_examples()
   
   #### Test for wheat ####
   wheat <- get_apsimx_json(model = "Wheat", wrt.dir = tmp.dir)

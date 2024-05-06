@@ -477,7 +477,7 @@ read_apsimx <- function(file = "", src.dir = ".", value = "report", simplify = T
   
   file.name.path <- file.path(src.dir, file)
   
-  con <- DBI::dbConnect(RSQLite::SQLite(), file.name.path)
+  con <- DBI::dbConnect(RSQLite::SQLite(), file.name.path, flags = RSQLite::SQLITE_RO)
   ## create data frame for each table
   ## Find table names first
   table.names <- RSQLite::dbListTables(con)
@@ -723,7 +723,7 @@ assign('.run.local.tests', FALSE, apsimx.options)
 #' @import DBI jsonlite knitr RSQLite xml2 
 #' @importFrom utils read.table write.table packageVersion
 #' @importFrom tools file_path_sans_ext file_ext
-#' @importFrom stats aggregate anova coef cor cov2cor deviance lm optim qt var sd setNames sigma 
+#' @importFrom stats aggregate anova coef cor cov2cor deviance lm optim qt quantile var sd setNames sigma 
 NULL
 
 utils::globalVariables(".data")

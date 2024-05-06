@@ -465,7 +465,7 @@ soil_variable_profile <- function(nlayers, a = 0.5, b = 0.5){
 #' @param property \dQuote{all} for plotting all soil properties, \dQuote{water} for just SAT, DUL and LL15
 #' @return it produces a plot
 #' @export 
-plot.soil_profile <- function(x,..., property = c("all", "water","BD",
+plot.soil_profile <- function(x,..., property = c("all", "water", "initialwater", "BD",
                                               "AirDry","LL15","DUL","SAT",
                                               "KS", "Carbon", "SoilCNRatio", 
                                               "FOM","FOM.CN","FBiom",
@@ -477,7 +477,7 @@ plot.soil_profile <- function(x,..., property = c("all", "water","BD",
   }
   ## Really dumb... but for now...
   dist <- NA; soil.depths <- NA; soil.depth.bottom <- NA; SAT <- NA
-  LL15 <- NA; DUL <- NA; AirDry <- NA
+  LL15 <- NA; DUL <- NA; AirDry <- NA; InitialValues <- NULL
   xsoil <- x$soil
   ## Add soil bottom depth
   xsoil$soil.depth.bottom <- sapply(as.character(xsoil$Depth), FUN = function(x) as.numeric(strsplit(x,"-")[[1]][2]))
@@ -486,11 +486,11 @@ plot.soil_profile <- function(x,..., property = c("all", "water","BD",
   
   property.in.crops <- try(match.arg(property, choices = crops.property, several.ok = TRUE), silent = TRUE)
   
-  properties <- c("all", "water","BD",
-                  "AirDry","LL15","DUL","SAT",
+  properties <- c("all", "water", "initialwater", "BD",
+                  "AirDry", "LL15","DUL","SAT",
                   "KS", "Carbon", "SoilCNRatio", 
-                  "FOM","FOM.CN","FBiom",
-                  "FInert","NO3N","NH4N","PH")
+                  "FOM", "FOM.CN", "FBiom",
+                  "FInert", "NO3N", "NH4N", "PH")
     
   if(inherits(property.in.crops, "try-error")){
     property <- try(match.arg(property), silent = TRUE) 
@@ -506,7 +506,7 @@ plot.soil_profile <- function(x,..., property = c("all", "water","BD",
     }
   }
 
-  if(property != "all" && property != "water"){
+  if(property != "all" && !(property %in% c("water", "initialwater"))){
     
     tmp <- xsoil[,c(property,"Depth","soil.depth.bottom")]
     gp <- ggplot2::ggplot() + 
@@ -589,6 +589,39 @@ plot.soil_profile <- function(x,..., property = c("all", "water","BD",
               ggplot2::coord_flip()  
     print(gp)
   }
+  
+  if(property == "initialwater"){
+
+    iwat <- x$initialwater
+    if(!inherits(x$initialwater, "initialwater_parms")){
+      stop("Could not find initial water", call. = FALSE)
+    }else{
+      if(any(is.na(iwat$Thickness))) stop("Thickness is missing in initial water", call. = FALSE)
+      if(any(is.na(iwat$InitialWater))) stop("InitialWater is missing in initial water", call. = FALSE)
+    }
+    
+    iwatd <- data.frame(Thickness = iwat$Thickness, InitialValues = iwat$InitialValues)
+    iwatd$Depth <- .t2d(iwat$Thickness)
+    iwatd$soil.depth.bottom <- sapply(as.character(iwatd$Depth), FUN = function(x) as.numeric(strsplit(x,"-")[[1]][2]))
+
+    ### Need to insert soil.depth.bottom
+    tmp <- xsoil
+    gp <- ggplot2::ggplot() +
+      ggplot2::geom_line(data = tmp, ggplot2::aes(x = -soil.depth.bottom, y = SAT, color = "SAT")) +
+      ggplot2::geom_line(data = tmp, ggplot2::aes(x = -soil.depth.bottom, y = AirDry), color = "red") + 
+      ggplot2::ggtitle("Soil water (AirDry, LL15, InitialWater, DUL, SAT)") +
+      ggplot2::geom_ribbon(data = tmp, ggplot2::aes(x = -soil.depth.bottom, ymin = LL15, ymax = DUL), 
+                           color = "blue",
+                           fill = "deepskyblue1") + 
+      ggplot2::geom_line(data = iwatd, ggplot2::aes(x = -soil.depth.bottom, y = InitialValues, color = "InitialWater")) + 
+      ggplot2::labs(x = "Soil Depth (cm)", y = "proportion", color = "Legend") + 
+      ggplot2::scale_color_manual(name = "Water", 
+                                  breaks = c("SAT", "InitialWater"),
+                                  values = c(SAT = "black", InitialWater = "purple")) + 
+      ggplot2::coord_flip()
+    print(gp)
+  }
+  
   invisible(gp)
 }
 
@@ -655,6 +688,10 @@ check_apsimx_soil_profile <- function(x, particle.density = 2.65){
   if(min(soil$KS) <= 0) warning("KS is zero or negative")
   ## crop.soil
   for(i in seq_along(crop.vars)){
+    if(is.null(soil[[crop.vars[i]]])){
+      warning(paste(crop.vars[i], "is not present"))
+      next
+    } 
     if(min(soil[[crop.vars[i]]]) < 0) warning(paste(crop.vars[i], "is negative"))
     if(max(soil[[crop.vars[i]]]) > 1) warning(paste(crop.vars[i], "is greater than 1"))
   }
@@ -739,9 +776,11 @@ check_apsimx_soil_profile <- function(x, particle.density = 2.65){
   }
   
   ## Check for initial water
-  if(!is.null(soil$initialwater)){
+  if(inherits(soil$initialwater, "initialwater_parms")){
     ## Initial Water can't be greater than DUL?
     if(!is.na(soil$initialwater$InitialValues)){
+      if(length(soil$initialwater$InitialValues) != length(soil$DUL))
+        warning("Number of layers in initialwater$InitialValues is different from number of layers in soil$DUL")
       for(j in seq_along(soil$initialwater$InitialValues)){
         iwat <- soil$initialwater$InitialValues[j] - soil$DUL[j]
         if(iwat <= 0){
@@ -801,21 +840,27 @@ fix_apsimx_soil_profile <- function(x, soil.var = c("SAT", "BD"), particle.densi
   }
   
   ## Trying to fix the initialwater issue
-  if(!is.na(x$initialwater)){
-    if(!is.na(x$initialwater$InitialValues)){
-      for(j in seq_along(x$initialwater$InitialValues)){
-        iwat <- x$initialwater$InitialValues[j] - x$soil$DUL[j]
-        if(iwat < 0){
-          x$initialwater$InitialValues[j] <- x$soil$DUL * 0.9  
-          if(verbose){
-            cat("InitialWater cannot be greater than DUL in layer:", j,".\n",
-                "It was adjusted to the value of 0.9 * DUL.\n")
+  if(inherits(x$initialwater, "initialwater_parms")){
+      if(!any(is.na(x$initialwater$InitialValues))){
+        for(j in seq_along(x$initialwater$InitialValues)){
+          iwat <- x$initialwater$InitialValues[j] - x$soil$DUL[j]
+          if(length(iwat < 0) > 1){
+            cat("Class of iwat", class(iwat), "\n")
+            cat("InitialValues:", x$initialwater$InitialValues[j] , "\n")
+            cat("DUL:", x$soil$DUL[j] , "\n")
+            cat("length of InitialWater:", length(iwat < 0), "layer", j, "\n")
+            stop("iwat length greater than one")
+          }
+          if(any(iwat < 0)){
+            x$initialwater$InitialValues[j] <- x$soil$DUL[j] * 0.9  
+            if(verbose){
+              cat("InitialWater cannot be greater than DUL in layer:", j,".\n",
+                  "It was adjusted to the value of", x$soil$DUL[j] * 0.9, ".\n")
+            }
           }
         }
       }
-    }
   }
-  
   return(x)
 }
 
@@ -944,7 +989,7 @@ compare_apsim_soil_profile <- function(...,
     for(i in soil.var.sel){
       if(verbose) cat("Variable ", i, "\n")
       ans$variable[k] <- i
-      tmp <- soil.mrg.s[, grep(i, names(soil.mrg.s))]
+      tmp <- soil.mrg.s[, grep(i, names(soil.mrg.s)), drop = FALSE]
       if(ncol(tmp) > 2){
         if(i == "FOM"){
           tmp <- soil.mrg.s[, grep("FOM.[1-9]", names(soil.mrg.s))]    
@@ -952,7 +997,9 @@ compare_apsim_soil_profile <- function(...,
           tmp <- soil.mrg.s[, grep("FOM.CN", names(soil.mrg.s))]   
         }
       }
-      if(ncol(tmp) < 2) stop("merged selected variables should be at least of length 2", call. = FALSE)
+      if(ncol(tmp) < 2){
+        stop("merged selected variables should be at least of length 2", call. = FALSE)
+      } 
       
       for(j in 2:ncol(tmp)){
         if(verbose) cat(names(tmp)[j - 1], " vs. ", names(tmp)[j], "\n")

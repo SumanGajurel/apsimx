@@ -345,16 +345,18 @@ if(run.sens.apsimx.cores){
   sns <- sens_apsimx("Wheat.apsimx", src.dir = tmp.dir,
                      parm.paths = c(pp1, pp2),
                      grid = grd)
-  ## This takes 1.55 minutes
-  ## This now (Jan 2024) takes 2.14 minutes
+  ## This takes 1.55 minutes (Mac)
+  ## This now (Jan 2024) takes 2.14 minutes (Mac)
+  ## Windows (Apr 2024): 51 seconds
   summary(sns)
-  summary(sns, select = "Wheat.AboveGround.Wt")
-  summary(sns, select = "AboveGround")
+  summary(sns, select = "Wheat.AboveGround.Wt", scale = TRUE)
+  summary(sns, select = "AboveGround", scale = TRUE)
   
   sns.c2 <- sens_apsimx("Wheat.apsimx", src.dir = tmp.dir,
                         parm.paths = c(pp1, pp2),
                         grid = grd, cores = 2)
   ## This takes 1.29 minutes (Jan 2024)
+  ## Windows: NA
   ## Are they the same?
   (diff.sns.vs.sns.c2 <- sum(colSums(sns$grid.sims - sns.c2$grid.sims)))
   
@@ -369,12 +371,91 @@ if(run.sens.apsimx.cores){
   
   if(abs(diff.sns.vs.sns.c4) > 0.001)
     stop("Simulations with 4 cores do not match")
+
+  #### Summary = 'none' and 1L core
+  sns.s0 <- sens_apsimx("Wheat.apsimx", src.dir = tmp.dir,
+                        parm.paths = c(pp1, pp2),
+                        summary = "none",
+                        grid = grd)
   
-  # sns.c8 <- sens_apsimx("Wheat.apsimx", src.dir = tmp.dir,
-  #                       parm.paths = c(pp1, pp2),
-  #                       grid = grd, cores = 8)
-  # 
-  # (diff.sns.vs.sns.c8 <- sum(colSums(sns$grid.sims - sns.c8$grid.sims)))
- 
+  sns.s0.c2 <- sens_apsimx("Wheat.apsimx", src.dir = tmp.dir,
+                           parm.paths = c(pp1, pp2),
+                           summary = "none",
+                           grid = grd,
+                           cores = 2L)
+  ##require(arsenal) 
   
+  ## Data.frames are not identical, but summary results are
+  ## cm1 <- arsenal::comparedf(sns.s0$grid.sims, sns.s0.c2$grid.sims)
+  sns.s0$grid.sims[78, "Fertiliser"]
+  sns.s0.c2$grid.sims[78, "Fertiliser"]
+  
+  summary(sns.s0, select = "AboveGround.Wt", scale = TRUE)
+  summary(sns.s0.c2, select = "AboveGround.Wt", scale = TRUE)
+  
+  summary(sns.s0, select = "AboveGround.N", scale = TRUE)
+  summary(sns.s0.c2, select = "AboveGround.N", scale = TRUE)
+  
+  summary(sns.s0, select = "Yield", scale = TRUE)
+  summary(sns.s0.c2, select = "Yield", scale = TRUE)
+  
+  ### What if I reorder the simulations?
+  snsd1 <- sns.s0$grid.sims
+  snsd2 <- sns.s0.c2$grid.sims
+
+  snsd1.o <- snsd1[order(snsd1$Fertiliser, snsd1$Population, snsd1$Date), ]
+  snsd2.o <- snsd2[order(snsd2$Fertiliser, snsd2$Population, snsd2$Date), ]
+  ##cmpd12 <- arsenal::comparedf(snsd2.o, snsd2.o)   
+  
+  
+}
+
+#### Testing passing of soil profiles -----
+
+run.sens.apsimx.soils <- FALSE
+
+if(run.sens.apsimx.soils){
+  
+  extd.dir <- system.file("extdata", package = "apsimx")
+  file.copy(file.path(extd.dir, "Wheat.apsimx"), ".")
+  ## Identify a parameter of interest
+  ## In this case we want to know the impact of varying the fertilizer amount
+  ## and the plant population
+  pp1 <- inspect_apsimx("Wheat.apsimx", src.dir = ".", 
+                        node = "Manager", parm = list("SowingFertiliser", 1))
+  pp1 <- paste0(pp1, ".Amount")
+  
+  pp2 <- inspect_apsimx("Wheat.apsimx", src.dir = tmp.dir, 
+                        node = "Manager", parm = list("SowingRule1", 9))
+  pp2 <- paste0(pp2, ".Population")
+  
+  grd <- expand.grid(parm1 = c(50, 100, 150), parm2 = c(100, 200, 300), parm3 = c(1, 2))
+  names(grd) <- c("Fertiliser", "Population", "soil.profile")
+  
+  inspect_apsimx("Wheat", node = "Other", parm = list(1, 1, 5, 0), print.path = TRUE)
+
+  ### Getting soils
+  sps <- get_ssurgo_soil_profile(lonlat = c(-93, 42), nsoil = 2)
+  
+  plot(sps[[1]], property = "water")
+  plot(sps[[1]], property = "Carbon")
+
+  sns <- sens_apsimx("Wheat.apsimx", src.dir = tmp.dir,
+                     parm.paths = c(pp1, pp2, 'soil.profile'),
+                     soil.profiles = sps,
+                     grid = grd)
+  
+  snsd <- sns$grid.sims
+  
+  ggplot(data = snsd, aes(x = Fertiliser, y = Yield, color = as.factor(soil.profile))) + 
+    facet_wrap(~ Population) + 
+    geom_line()
+  
+  ### Compare soil profiles
+  cmps <- compare_apsim_soil_profile(sps[[1]], sps[[2]])
+  
+  plot(cmps, plot.type = "depth", soil.var = c("DUL"))
+  plot(cmps, plot.type = "depth", soil.var = c("LL15")) ## Should implement 'water'
+  plot(cmps, plot.type = "depth", soil.var = "Carbon")
+    
 }

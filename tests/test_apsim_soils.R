@@ -36,6 +36,7 @@ try.isric <- try(get_isric_soil_profile(lonlat = c(-93, 42), fix = TRUE, verbose
 
 ## If the above fails it is very likely that the server is down
 if(inherits(try.isric, 'try-error')) run.apsimx.soils.fix <- FALSE
+run.apsimx.soils.fix <- FALSE
 
 if(run.apsimx.soils.fix){
   

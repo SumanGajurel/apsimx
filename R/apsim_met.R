@@ -329,7 +329,28 @@ check_apsim_met <- function(met){
   
   if(nrow(met) == 0)
     stop("No rows of data present in this object.", call. = FALSE)
+  
+  if(is.null(attr(met, 'amp')))
+    warning("'amp' is missing")
 
+  if(is.null(attr(met, 'tav')))
+    warning("'tav' is missing")
+  
+  if(!is.null(attr(met, 'amp'))){
+    amp.value <- as.numeric(strsplit(attr(met, 'amp'), split = "\\s+")[[1]][3])
+    met0 <- amp_apsim_met(met) 
+    amp.value.calc <- as.numeric(strsplit(attr(met0, 'amp'), split = "\\s+")[[1]][3])
+    if(abs(amp.value - amp.value.calc) > 0.5)
+      warning(paste("'amp' value", amp.value, "in met file is different from calculated", amp.value.calc))
+  }
+
+  if(!is.null(attr(met, 'tav'))){
+    tav.value <- as.numeric(strsplit(attr(met, 'tav'), split = "\\s+")[[1]][3])
+    met0 <- tav_apsim_met(met) 
+    tav.value.calc <- as.numeric(strsplit(attr(met0, 'tav'), split = "\\s+")[[1]][3])
+    if(abs(tav.value - tav.value.calc) > 0.5)
+      warning(paste("'tav' value", tav.value, "in file is different from calculated", tav.value.calc))
+  }
   
   if(length(colnames(met)) != length(attr(met, "colnames")))
     stop("Length of column names does not match the length of 'colnames' in the attributes", call. = FALSE)
@@ -601,15 +622,9 @@ as_apsim_met <- function(x,
   
   if(is.na(tav)){
     tav <- mean(colMeans(x[,c("maxt","mint")], na.rm=TRUE), na.rm=TRUE)
-    attr(x, "tav") <- paste("tav =", tav, "(oC) ! annual average ambient temperature")  
+    attr(x, "tav") <- paste("tav =", tav, "(oC) ! calculated annual average ambient temperature", Sys.time())  
   }else{
     attr(x, "tav") <- tav
-  }
-  
-  if(is.na(amp)){
-    attr(x, "amp") <- paste("amp =", mean(x$maxt, na.rm=TRUE) - mean(x$mint, na.rm = TRUE), "(oC) ! annual amplitude in mean monthly temperature")  
-  }else{
-    attr(x, "amp") <- amp  
   }
   
   attr(x, "colnames") <- colnames
@@ -618,7 +633,13 @@ as_apsim_met <- function(x,
   attr(x, "comments") <- comments
   class(x) <- c("met","data.frame")
   
-  if(check) apsimx::check_apsim_met(x)
+  if(is.na(amp)){
+    x <- amp_apsim_met(x)
+  }else{
+    attr(x, "amp") <- amp  
+  }
+  
+  if(check) check_apsim_met(x)
   
   return(x) 
 }
@@ -998,6 +1019,8 @@ pp_apsim_met <- function(metfile, lat, sun_angle=0){
 #' temperature (min and max) is displayed
 #' @param plot.type type of plot, default is \sQuote{ts} or time-series. 
 #' The options \sQuote{area} and \sQuote{col} are only available when summary = TRUE.
+#' Option \sQuote{density} produces a simple plot. Option \sQuote{anomaly} ignores
+#' argument cumulative is treated as TRUE regardless.
 #' @param cumulative default is FALSE. Especially useful for \sQuote{rain}.
 #' @param facet whether to display the years in in different panels (facets). Not implemented yet.
 #' @param climatology logical (default FALSE). Whether to display the \sQuote{climatology}
@@ -1016,6 +1039,7 @@ pp_apsim_met <- function(metfile, lat, sun_angle=0){
 #' ## for rain
 #' plot(ames, met.var = "rain", years = 2012:2015, cumulative = TRUE)
 #' plot(ames, met.var = "rain", years = 2012:2015, cumulative = TRUE, climatology = TRUE)
+#' plot(ames, met.var = "rain", years = 2012:2015, plot.type = "anomaly")
 #' ## It is possible to add ggplot elements
 #' library(ggplot2)
 #' p1 <- plot(ames, met.var = "rain", years = 2012:2015, cumulative = TRUE)
@@ -1023,7 +1047,7 @@ pp_apsim_met <- function(metfile, lat, sun_angle=0){
 #' }
 #' 
 plot.met <- function(x, ..., years, met.var, 
-                     plot.type = c("ts", "area", "col", "density"), 
+                     plot.type = c("ts", "area", "col", "density", "anomaly"), 
                      cumulative = FALSE,
                      facet = FALSE,
                      climatology = FALSE,
@@ -1042,13 +1066,23 @@ plot.met <- function(x, ..., years, met.var,
   ## Global variables?
   day <- NULL; cum.maxt <- NULL; Years <- NULL; cum.mint <- NULL;
   value <- NULL; temperature <- NULL; maxt <- NULL; mint <- NULL;
-  cum.met.var <- NULL; year <- NULL; Year <- NULL
+  cum.met.var <- NULL; year <- NULL; Year <- NULL; q25 <- NULL;
+  q75 <- NULL; tav <- NULL; tav1 <- NULL; tav2 <- NULL; 
+  InitialValues <- NULL 
   ## Calculate climatology before subsetting years
-  if(climatology){
+  if(climatology || plot.type == "anomaly"){
     maxt.climatology <- stats::aggregate(maxt ~ day, data = x, FUN = mean)
+    maxt.climatology.q25 <- stats::aggregate(maxt ~ day, data = x, FUN = stats::quantile, probs = 0.25)
+    maxt.climatology.q75 <- stats::aggregate(maxt ~ day, data = x, FUN = stats::quantile, probs = 0.75)
     mint.climatology <- stats::aggregate(mint ~ day, data = x, FUN = mean)
+    mint.climatology.q25 <- stats::aggregate(mint ~ day, data = x, FUN = stats::quantile, probs = 0.25)
+    mint.climatology.q75 <- stats::aggregate(mint ~ day, data = x, FUN = stats::quantile, probs = 0.75)
     rain.climatology <- stats::aggregate(rain ~ day, data = x, FUN = mean)
+    rain.climatology.q25 <- stats::aggregate(rain ~ day, data = x, FUN = stats::quantile, probs = 0.25)
+    rain.climatology.q75 <- stats::aggregate(rain ~ day, data = x, FUN = stats::quantile, probs = 0.75)
     radn.climatology <- stats::aggregate(radn ~ day, data = x, FUN = mean)
+    radn.climatology.q25 <- stats::aggregate(radn ~ day, data = x, FUN = stats::quantile, probs = 0.25)
+    radn.climatology.q75 <- stats::aggregate(radn ~ day, data = x, FUN = stats::quantile, probs = 0.75)
     met.var.climatology <- cbind(maxt.climatology, 
                                  mint.climatology[,"mint", drop = FALSE], 
                                  rain.climatology[,"rain", drop = FALSE], 
@@ -1070,6 +1104,7 @@ plot.met <- function(x, ..., years, met.var,
 
   ## Need to make a copy for at least this case
   if(plot.type == "density" && climatology) x2 <- x
+  if(plot.type == "anomaly" && summary) x2 <- x
 
   if(!missing(years)){
     x <- x[x$year %in% years,]
@@ -1264,6 +1299,60 @@ plot.met <- function(x, ..., years, met.var,
         print(gp1)    
       }
     }
+    
+    #### Anomaly ----
+    if(plot.type == "anomaly"){
+      if(missing(met.var)) met.var <- "maxt"
+      
+      met.var.units <- switch(met.var,
+                              rain = "(mm)",
+                              radn = "(MJ/m2)",
+                              rh = "(%)",
+                              maxt = "(degrees C)",
+                              mint = "(degrees C)",
+                              vp = "(hPa)",
+                              windspeed = "(m/s)",
+                              Classic_TT = "(Cd)",
+                              HeatStress_TT = "(Cd)",
+                              CropHeatUnit_TT = "(Cd)",
+                              photoperiod = "(hours)")
+      
+      xdat <- NULL
+      for(i in seq_along(sort(unique(x$year)))){
+        yr <- sort(unique(x$year))[i]
+        x.tmp <- x[x$year == yr,]
+        if(nrow(x.tmp) < 365) next ## Skip incomplete years
+        if(nrow(x.tmp) == 366) x.tmp <- x.tmp[1:365,]
+        x.dag.maxt <- cumsum(x.tmp$maxt) - cumsum(maxt.climatology[1:365, "maxt"])
+        x.dag.mint <- cumsum(x.tmp$mint) - cumsum(mint.climatology[1:365, "mint"])
+        x.dag.rain <- cumsum(x.tmp$rain) - cumsum(rain.climatology[1:365, "rain"])
+        x.dag.radn <- cumsum(x.tmp$radn) - cumsum(radn.climatology[1:365, "radn"])
+        xdat <- rbind(xdat, data.frame(year = yr, day = 1:nrow(x.tmp), 
+                                       maxt = x.dag.maxt, 
+                                       mint = x.dag.mint,
+                                       rain = x.dag.rain,
+                                       radn = x.dag.radn))
+      }
+      xdat$year <- as.factor(xdat$year)
+      xdats <- subset(xdat, select = c("year", "day", met.var))
+      names(xdats) <- c("year", "day", "met.var")
+      if(isFALSE(climatology)){
+        gp1 <- ggplot2::ggplot() + 
+          ggplot2::geom_line(data = xdats, ggplot2::aes(x = day, y = met.var, color = year)) +
+          ggplot2::ylab(paste("Cumulative anomaly for", met.var, met.var.units)) + 
+          ggplot2::geom_hline(yintercept = 0)        
+      }else{
+        met.var.sd <- aggregate(met.var ~ day, data = xdats, FUN = sd)
+        met.var.mean <- aggregate(met.var ~ day, data = xdats, FUN = mean)
+        dmat <- data.frame(day = 1:365, q75 = met.var.sd$met.var + met.var.mean$met.var, q25 = met.var.mean$met.var - met.var.sd$met.var)
+        gp1 <- ggplot2::ggplot() + 
+          ggplot2::geom_ribbon(data = dmat, ggplot2::aes(x = day, ymin = q25, ymax = q75, fill = "25-75"), fill = "deepskyblue1", alpha = 0.2) +
+          ggplot2::geom_line(data = xdats, ggplot2::aes(x = day, y = met.var, color = year)) +
+          ggplot2::ylab(paste("Cumulative anomaly for", met.var, met.var.units)) + 
+          ggplot2::geom_hline(yintercept = 0)
+      }
+      plot(gp1)
+    }
     ### The cumulative does not make much sense
     ### If summary is FALSE at least
     if(plot.type == "density" && cumulative)
@@ -1290,14 +1379,15 @@ plot.met <- function(x, ..., years, met.var,
     if(any(met.var %in% c("high_maxt", "high_mint", "avg_maxt", "avg_mint", "low_maxt", "low_mint")))
       ylabs <- "Temperature (degree C)"
     
-    if(any(grepl("rain_sum", met.var)) && length(met.var) > 1)
-      stop("If 'rain_sum' is chosen, it should be the only met variable", call. = FALSE)
-    
+    if(plot.type != "anomaly"){
+      if(any(grepl("rain_sum", met.var)) && length(met.var) > 1){
+        cat("Selected met variables:", met.var, "\n")
+        stop("If 'rain_sum' is chosen, it should be the only met variable", call. = FALSE)      
+      }
+    }
+
     if(any(met.var %in% c("rain_sum")))
       ylabs <- "Rainfall (mm)"
-    
-    if(any(grepl("radn", met.var)) && length(met.var) > 2)
-      stop("If 'radn' is chosen, it should not be mixed with other variables", call. = FALSE)
     
     if(any(met.var %in% c("radn_sum", "radn_avg")))
       ylabs <- "Radiation (MJ/m2)"
@@ -1394,6 +1484,71 @@ plot.met <- function(x, ..., years, met.var,
           print(gp1)      
         }
       }
+    }
+    
+    if(plot.type == "anomaly"){
+      if(missing(met.var)) 
+        stop("'met.var' is missing with no default", call. = FALSE)
+      
+      ax2 <- summary(x2, anomaly = met.var)
+
+      if(length(grep("anomaly", names(ax2))) == 1){
+        if(missing(years)){
+          gav <- grep("anomaly", names(ax2), value = TRUE)
+          ax2$tav <- ax2[[gav]]
+          gp1 <- ggplot2::ggplot(data = ax2, ggplot2::aes(x = tav, y = 0)) + 
+            ggplot2::geom_point() + 
+            ggplot2::geom_vline(xintercept = 0) + 
+            ggplot2::xlab(paste("Anomaly", met.var, " (%)")) +
+            ggplot2::ylab("") + 
+            ggplot2::scale_y_continuous(breaks = NULL)
+        }else{
+          gav <- grep("anomaly", names(ax2), value = TRUE)
+          ax2$tav <- ax2[[gav]]
+          sax2y <- subset(ax2, year %in% years)
+          sax2y$Year <- as.factor(sax2y$year)
+          gp1 <- ggplot2::ggplot() + 
+            ggplot2::geom_point(data = ax2, ggplot2::aes(x = tav, y = 0)) + 
+            ggplot2::geom_point(data = sax2y, ggplot2::aes(x = tav, y = 0, color = Year), size = 4) + 
+            ggplot2::geom_vline(xintercept = 0) + 
+            ggplot2::xlab(paste("Anomaly", met.var, " (%)")) + 
+            ggplot2::ylab("") +
+            ggplot2::scale_y_continuous(breaks = NULL)
+        }
+      }
+      
+      if(length(grep("anomaly", names(ax2))) > 1){
+        
+        if(length(grep("anomaly", names(ax2))) > 2){
+          cat("Variables:", grep("anomaly", names(ax2), value = TRUE), "\n")
+          stop("Select 'met.var' so that there are only two variables", call. = FALSE)
+        }
+          
+        #### Select only the variables needed
+        tavs <- grep("anomaly", names(ax2), value = TRUE)
+        ax2$tav1 <- ax2[[tavs[1]]]
+        ax2$tav2 <- ax2[[tavs[2]]]
+        
+        if(missing(years)){
+          gp1 <- ggplot2::ggplot(data = ax2, ggplot2::aes(x = tav1, y = tav2)) + 
+            ggplot2::geom_point() + 
+            ggplot2::geom_hline(yintercept = 0) + 
+            ggplot2::geom_vline(xintercept = 0) + 
+            ggplot2::xlab(paste("Anomaly", gsub("anomaly_", "", tavs[1]), " (%)")) + 
+            ggplot2::ylab(paste("Anomaly", gsub("anomaly_", "", tavs[2]), " (%)"))
+        }else{
+          sax2y <- subset(ax2, year %in% years)
+          sax2y$Year <- as.factor(sax2y$year)
+          gp1 <- ggplot2::ggplot() + 
+            ggplot2::geom_point(data = ax2, ggplot2::aes(x = tav1, y = tav2)) + 
+            ggplot2::geom_point(data = sax2y, ggplot2::aes(x = tav1, y = tav2, color = Year), size = 4) +
+            ggplot2::geom_hline(yintercept = 0) + 
+            ggplot2::geom_vline(xintercept = 0) + 
+            ggplot2::xlab(paste("Anomaly", gsub("anomaly_", "", tavs[1]), " (%)")) + 
+            ggplot2::ylab(paste("Anomaly", gsub("anomaly_", "", tavs[2]), " (%)"))
+        }
+      }
+      print(gp1)
     }
   }
   invisible(gp1)
@@ -1508,42 +1663,118 @@ remove_column_apsim_met <- function(met, name){
       stop("'name' is not provided. It should be the name of the column to remove", call. = FALSE)
   }
   
+  if(!name %in% names(met)){
+    cat("name:", name, "\n")
+    cat("names in met:", names(met), "\n")
+    stop("'name' to be removed is not in 'met' object", call. = FALSE)
+  }
+    
+  
   attr(met, "units") <- attr(met, "units")[-which(names(met) == name)]   
   met[[name]] <- NULL
   attr(met, "colnames") <- names(met)
   return(met)
 }
 
-#' This function can re-calculates annual mean monthly amplitude
+#' This function can re-calculate annual mean monthly amplitude
 #' for an object of class \sQuote{met}
 #' @title Calculates attribute amp for an object of class \sQuote{met}
 #' @param met object of class \sQuote{met}
+#' @param by.year whether to perform calculations by year (default is TRUE)
 #' @return an object of class \sQuote{met} with a recalculation of annual amplitude in mean monthly temperature 
 #' @export
-amp_apsim_met <- function(met){
+amp_apsim_met <- function(met, by.year = TRUE){
+  
+  if(!inherits(met, "met"))
+    stop("Object should be of class 'met", call. = FALSE)
+
+  ## Step 1: create date
+  date <- as.Date(paste(met$year, met$day, sep = "-"), format = "%Y-%j") 
+  ## Step 2: create month column
+  mnth <- as.numeric(format(date, "%m")) 
+  met <- add_column_apsim_met(met = met, value = mnth, name = "month", units = "()")
+
+  ## Step 3: This is how APSIM does it
+  if(by.year){
+    Year <- as.numeric(format(date, "%Y"))   
+    met <- add_column_apsim_met(met = met, value = Year, name = "Year", units = "()")  
+    amp.vec <- numeric(length(unique(Year)))
+    for(i in seq_along(unique(met$Year))){
+      tmp <- subset(met, Year == unique(met$Year)[i])
+      if(nrow(tmp) < 300){
+        warning(paste("Year:", unique(met$Year)[i], "was not used for calculating 'amp' because less than 300 days were present"))
+        next
+      } 
+      mtemp <- (tmp$maxt + tmp$mint) / 2
+      tmp <- add_column_apsim_met(met = tmp, value = mtemp, name = "m.temp", units = "(oC)")
+      tmp.agg <- aggregate(m.temp ~ month, data = tmp, FUN = mean)
+      amp.vec[i] <- round(max(tmp.agg$m.temp) - min(tmp.agg$m.temp), 2) 
+    }
+    ans <- mean(amp.vec)
+  }else{
+    ## Alternative simpler method
+    mtemp <- (met$maxt + met$mint) / 2
+    met <- add_column_apsim_met(met = met, value = mtemp, name = "m.temp", units = "(oC)")
+    met.agg <- aggregate(m.temp ~ mnth, data = met, FUN = mean)
+    ans <- round(max(met.agg$m.temp) - min(met.agg$m.temp), 2)    
+  }
+
+  ## Clean up
+  met <- remove_column_apsim_met(met, "month")
+  if(by.year){
+    met <- remove_column_apsim_met(met, "Year")
+  }else{
+    met <- remove_column_apsim_met(met, "m.temp")
+  }
+  
+  attr(met, "amp") <- paste("amp =", ans, "!calculated with the apsimx R package:", Sys.time())
+  
+  return(met)
+}
+
+#' This function can re-calculate annual mean temperature
+#' for an object of class \sQuote{met}
+#' @title Calculates attribute amp for an object of class \sQuote{met}
+#' @param met object of class \sQuote{met}
+#' @param by.year whether to compute tav for each year and then average (default is TRUE)
+#' @param na.rm whether to remove missing values (NAs). Default is TRUE.
+#' @return an object of class \sQuote{met} with a recalculation of annual mean temperature amplitude 
+#' @export
+tav_apsim_met <- function(met, by.year = TRUE, na.rm = TRUE){
   
   if(!inherits(met, "met"))
     stop("Object should be of class 'met", call. = FALSE)
   
   ## Step 1: create date
   date <- as.Date(paste(met$year, met$day, sep = "-"), format = "%Y-%j") 
-  ## Step 2: create month column
-  mnth <- as.numeric(format(date, "%m")) 
-  
-  met <- add_column_apsim_met(met = met, value = mnth, name = "month", units = "()")
 
-  mtemp <- (met$maxt + met$mint) / 2
-  met <- add_column_apsim_met(met = met, value = mtemp, name = "mean.temp", units = "(oC)")
-  
-  met.agg <- aggregate(mean.temp ~ mnth, data = met, FUN = mean)
-  
-  ans <- round(max(met.agg$mean.temp) - min(met.agg$mean.temp), 2)
+  ## Step 3: This is how APSIM does it
+  if(by.year){
+    Year <- as.numeric(format(date, "%Y"))   
+    met <- add_column_apsim_met(met = met, value = Year, name = "Year", units = "()")  
+    tav.vec <- numeric(length(unique(Year)))
+    for(i in seq_along(unique(met$Year))){
+      tmp <- subset(met, Year == unique(met$Year)[i])
+      mtemp <- mean(colMeans(tmp[, c("maxt", "mint")], na.rm = na.rm), na.rm = na.rm)
+      tav.vec[i] <- mtemp
+    }
+    ans <- mean(tav.vec)
+  }else{
+    ## Alternative simpler method
+      mtemp <- (met$maxt + met$mint) / 2
+      met <- add_column_apsim_met(met = met, value = mtemp, name = "m.temp", units = "(oC)")
+      met.agg <- aggregate(m.temp ~ mnth, data = met, FUN = mean)
+      ans <- round(max(met.agg$m.temp) - min(met.agg$m.temp), 2)    
+  }
   
   ## Clean up
-  met <- remove_column_apsim_met(met, "mean.temp")
-  met <- remove_column_apsim_met(met, "month")
+  if(by.year){
+    met <- remove_column_apsim_met(met, "Year")
+  }else{
+    met <- remove_column_apsim_met(met, "m.temp")  
+  }
   
-  attr(met, "amp") <- paste("amp = ", ans)
+  attr(met, "tav") <- paste("tav =", ans, "! calculated average annual temperature", Sys.time())
   
   return(met)
 }

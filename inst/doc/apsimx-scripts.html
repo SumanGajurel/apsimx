@@ -12,7 +12,7 @@
 
 <meta name="author" content="Fernando Miguez" />
 
-<meta name="date" content="2024-01-28" />
+<meta name="date" content="2024-05-06" />
 
 <title>apsimx: writing scripts</title>
 
@@ -340,7 +340,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">apsimx: writing scripts</h1>
 <h4 class="author">Fernando Miguez</h4>
-<h4 class="date">2024-01-28</h4>
+<h4 class="date">2024-05-06</h4>
 
 
 
@@ -371,12 +371,12 @@ provides support for APSIM ‘Classic’.</p>
 <p>Let’s see what is needed to run APSIM-X at the command line.</p>
 <div id="windows" class="section level2">
 <h2>Windows</h2>
-<p>In Windows, if you use the current (2024-01-28) version of the
+<p>In Windows, if you use the current (2024-05-06) version of the
 installer the program will be, most likely, in:</p>
 <p><strong>C:\Program
-Files\APSIM2021.08.12.6707\bin\Models.exe</strong></p>
+Files\APSIM2024.2.7382.0\bin\Models.exe</strong></p>
 <p>Notice that for each new build of APSIM-X the path will change. After
-‘APSIM’ is the year, month, date and version separated by a period. In
+‘APSIM’ is the year and month, and version separated by a period. In
 this case ‘2021.08.12.6707’. In the folder ‘bin’ (for ‘binary’) there
 are many libraries (‘.dll files’) and some executables. The ‘Models.exe’
 is the one that can run .apsimx files.</p>
@@ -387,14 +387,13 @@ to use Windows short name paths, which in this case, for ‘Program Files’
 is ‘PROGRA~1’ (but this can change). If running the program from R, for
 example, the separator needs to be either a double backslash ‘\\’ or a
 forward slash ‘/’. So one example would be:</p>
-<p><strong>C:/PROGRA~1/APSIM2021.08.12.6707/bin/Models.exe</strong>
-or</p>
-<p><strong>C:\\PROGRA~1\\APSIM2021.08.12.6707\\bin\\Models.exe</strong></p>
+<p><strong>C:/PROGRA~1/APSIM2024.2.7382.0/bin/Models.exe</strong> or</p>
+<p><strong>C:\\PROGRA~1\\APSIM2024.2.7382.0\\bin\\Models.exe</strong></p>
 <p>The backslash (“\”) is an escape character in R, so you can’t use it
 within strings.</p>
 <p>After this, the name of the file that you want to run needs to be
 included. For example,</p>
-<p><strong>C:/PROGRA~1/APSIM2021.08.12.6707/bin/Models.exe
+<p><strong>C:/PROGRA~1/APSIM2024.2.7382.0/bin/Models.exe
 ./Wheat.apsimx</strong>.</p>
 <p>Notice the “./”, without this, it will likely not work under Windows.
 (update: this issue has been addressed in current version of APSIM Next
@@ -403,7 +402,7 @@ Windows shell. It needs to be translated with the forward slashes (“/”)
 converted to backslashes (“\”).</p>
 <p>So to run the previous command in Windows from within R this is one
 way:</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a>run.strng <span class="ot">&lt;-</span> <span class="st">&quot;C:/PROGRA~1/APSIM2021.08.12.6707/bin/Models.exe ./Wheat.apsimx&quot;</span></span>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a>run.strng <span class="ot">&lt;-</span> <span class="st">&quot;C:/PROGRA~1/APSIM2024.2.7382.0/bin/Models.exe ./Wheat.apsimx&quot;</span></span>
 <span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a><span class="fu">shell</span>(<span class="at">cmd =</span> run.strng, <span class="at">translate =</span> <span class="cn">TRUE</span>, <span class="at">intern =</span> <span class="cn">TRUE</span>)</span></code></pre></div>
 <!-- Note: it seems that, in Windows, it is only possible to run files in the current directory. So, for example, if the file 'Wheat.apsimx' was in subdirectory './myApsimXsimulations' and you want to replace the './Wheat.apsimx' above with './myApsimXsimulations/Wheat.apsimx' this does not work. I do not know yet if there is a possible workaround. This issue was fixed at one point. It is now possible to run from a different directory. -->
 </div>
@@ -411,7 +410,7 @@ way:</p>
 <h2>Unix (Mac) or Linux (Debian)</h2>
 <p>For current versions of APSIM Next Gen, this command should be able
 to run from the command line:</p>
-<p><strong>/Applications/APSIM2021.10.11.6842.app/Contents/Resources/bin/Models
+<p><strong>/Applications/APSIM2024.2.7382.0.app/Contents/Resources/bin/Models
 ./Wheat.apsimx</strong></p>
 <p><strong>Mono is not required.</strong></p>
 <div id="pre-sep-2021-mono-required" class="section level3">
@@ -446,17 +445,17 @@ For example, you might want to move to:</p>
 <p>Then find out where APSIM-X is installed, but this will change with
 each new version. For example, I have these versions installed now:</p>
 <p>Mac:</p>
-<p><strong>/Applications/APSIM2021.10.11.6842.app</strong></p>
+<p><strong>/Applications/APSIM2024.2.7382.0.app</strong></p>
 <p>Debian:</p>
-<p>apsim lib: <strong>/usr/local/lib/apsim/2021.08.12.6707</strong></p>
+<p>apsim lib: <strong>/usr/local/lib/apsim/2024.2.7382.0</strong></p>
 <p>The apsim binary is in: <strong>/usr/local/bin/apsim</strong></p>
 <p>Finally, to run an example at the command line:</p>
 <p>Mac:</p>
 <p><strong>mono
-/Applications/APSIM2021.08.12.6707.app/Contents/Resources/bin/Models.exe
+/Applications/APSIM2024.2.7382.0.app/Contents/Resources/bin/Models.exe
 ./Wheat.apsimx</strong></p>
 <p>Debian:</p>
-<p><strong>mono /usr/local/lib/apsim/2021.08.12.6707/bin/Models.exe
+<p><strong>mono /usr/local/lib/apsim/2024.2.7382.0/bin/Models.exe
 ./Wheat.apsimx</strong></p>
 <p>The previous two commands assume that the file “Wheat.apsimx” is
 present in the current working directory. A detail that seems to have

@@ -9,12 +9,16 @@
 #' \sQuote{file} \emph{-edited.apsimx} will be created.  If (verbose = TRUE) then the name
 #'  of the written file is returned. 
 #'  
-#'  When node equals Report, the editing allows to add variables, but not to remove them at the moment.
+#'  When node equals \sQuote{Report}, the editing allows to add variables, but not to remove them at the moment.
 #' 
 #'  When node equals Operations, \sQuote{parm} should have a list with two elements. The first should be the line(s) to edit and 
 #'  the second should be the component(s) to edit. Either \sQuote{Date}, \sQuote{Action} or \sQuote{Line}.
 #'  When more than one line is edited, \sQuote{value} should be a character vector of the same length as the number of
-#'  lines to edit.
+#'  lines to edit. It is possible to remove, say, line 10 by using \sQuote{parm = list(-10, NA)}. It is safer to remove
+#'  lines at the end of \sQuote{Operations}. To remove several use the following \sQuote{parm = list(-c(10:12), NA)}. 
+#'  This assumes that \sQuote{12} is the maximum number of lines present. Trying to remove lines in the middle will have 
+#'  unexpected effects. It is possible to create additional lines, but only by using \sQuote{Date} first. This feature
+#'  has not been tested much so use it carefully.
 #'  
 #' @name edit_apsimx
 #' @param file file ending in .apsimx to be edited (JSON)
@@ -73,7 +77,7 @@
 
 edit_apsimx <- function(file, src.dir = ".", wrt.dir = NULL,
                         node = c("Clock", "Weather", "Soil", "SurfaceOrganicMatter", "MicroClimate", "Crop", "Manager", "Report", "Operations", "Other"),
-                        soil.child = c("Metadata", "Water", "SoilWater", "Organic", "Physical", "Analysis", "Chemical", "InitialWater", "Sample"),
+                        soil.child = c("Metadata", "Water", "SoilWater", "Organic", "Physical", "Analysis", "Chemical", "InitialWater", "Sample", "Swim3"),
                         manager.child = NULL,
                         parm = NULL, value = NULL, 
                         overwrite = FALSE,
@@ -101,15 +105,74 @@ edit_apsimx <- function(file, src.dir = ".", wrt.dir = NULL,
   
   if(apsimx_filetype(file = file, src.dir = src.dir) != "json")
     stop("This function only edits JSON files")
+
+  if(!is.null(parm.path) && node != "Other")
+    stop("When parm.path is supplied node should be 'Other'", call. = FALSE)
+  
+  if(is.null(value))
+    stop("'value' is missing", call. = FALSE)
   
   ## Parse apsimx file (JSON)
   apsimx_json <- jsonlite::read_json(file.path(src.dir, file))
   
-  if(!missing(parm.path) && node != "Other")
-    stop("When parm.path is supplied node should be 'Other'", call. = FALSE)
-  
+  ## apsimx_json <<- apsimx_json
   ## Where is the 'Core' simulation?
-  wcore <- grep("Core.Simulation", apsimx_json$Children)
+  children.names <- sapply(apsimx_json$Children, FUN = function(x) x$`$type`)
+  wcore <- grep("Core.Simulation", children.names)
+  
+  parm.path.0 <- paste0(".", apsimx_json$Name) ## Root
+  ## When node == "Other" root should always be missing
+  ## The problem is that I have to guess it
+  ## We should be able to use node == "Other" even if root is not missing
+  if(node == "Other" && is.null(root) && length(wcore) > 1){
+    ## Process 'parm'
+    if(is.null(parm.path))
+      stop("parm.path is missing")
+    if(!grepl(".", parm.path, fixed = TRUE))
+      stop("parm.path is not a proper json path")
+    cparm <- paste0(parm.path, ".", parm)
+    pparm <- strsplit(cparm, split = ".", fixed = TRUE)[[1]]
+    root.name.level.0 <- gsub(".", "", parm.path.0, fixed = TRUE)
+    if(pparm[2] != root.name.level.0)
+      stop(paste("First parm element does not match:", root.name.level.0), call. = FALSE)
+    root1 <- pparm[3] 
+    if(is.na(pparm[4])){
+      root <- root1
+    }else{
+      ## Guess if 'root' is contained in the first level of names
+      root.names.level.1 <- vapply(apsimx_json$Children, FUN = function(x) x$Name, 
+                                   FUN.VALUE = "character")
+      wroot1 <- grep(as.character(root1), root.names.level.1)    
+      if(length(wroot1) == 0)
+        stop(paste("Second element of parm did not match:", root.names.level.1), call. = FALSE)
+      ## Need to test if the fourth element of pparm is a node
+      nodes <- c("Clock", "Weather", "Soil", "SurfaceOrganicMatter", "MicroClimate", "Crop", "Manager","Report", "Operations", "Other", "Field")
+      if(pparm[4] %in% nodes){
+        ## This amounts to guessing that root should be of length 1
+        root <- list(pparm[3])
+      }else{
+        ## This amounts to guessing that pparm[4] should be the second element in 
+        root.names.level.2 <- vapply(apsimx_json$Children[[wroot1]]$Children, 
+                                     FUN = function(x) x$Name, 
+                                     FUN.VALUE = "character")
+        root2 <- pparm[4]
+        wroot2 <- grep(as.character(root2), root.names.level.2)  
+        if(length(wroot2) == 0)
+          stop(paste("Third element of parm did not match:", root.names.level.2), call. = FALSE)
+        if(pparm[5] %in% nodes){
+          root <- list(pparm[3], pparm[4])
+        }else{
+          root.names.level.3 <- vapply(apsimx_json$Children[[wroot1]]$Children[[wroot2]]$Children, 
+                                       FUN = function(x) x$Name, 
+                                       FUN.VALUE = "character")
+          root3 <- pparm[5]
+          wroot3 <- grep(as.character(root3), root.names.level.3)    
+          if(length(wroot3) == 0)
+            stop(paste("Fourth element of parm did not match:", root.names.level.3), call. = FALSE)
+        }
+      }      
+    }
+  }
 
   if(length(wcore) > 1 || !is.null(root)){
     if(is.null(root)){
@@ -117,11 +180,13 @@ edit_apsimx <- function(file, src.dir = ".", wrt.dir = NULL,
       str_list(apsimx_json)
       stop("more than one simulation found and no root node label has been specified \n select one of the children names above")   
     }else{
+      ## Parse root
+      root <- parse_root(root)
       if(length(root) > 3)
         stop("At the moment 3 is the maximum length for root", call. = TRUE)
-      
       if(length(root) == 1){
-        wcore1 <- grep(as.character(root), apsimx_json$Children)
+        root.node.0.names <- sapply(apsimx_json$Children, function(x) x$Name)
+        wcore1 <- grep(as.character(root), root.node.0.names)
         if(length(wcore1) == 0 || length(wcore1) > 1)
           stop("no root node label found or root is not unique")
         parent.node <- apsimx_json$Children[[wcore1]]$Children
@@ -385,6 +450,17 @@ edit_apsimx <- function(file, src.dir = ".", wrt.dir = NULL,
       soil.node[[1]]$Children[wsn][[1]] <- soil.sample.node
     }
     
+    if(soil.child == "Swim3"){
+      edited.child <- "Swim3"
+      wswimn <- grepl("Swim3", soil.node0)
+      soil.swim.node <- soil.node0[wswimn][[1]]
+      
+      for(i in 1:length(soil.swim.node[[parm]])){
+        soil.swim.node[[parm]][[i]] <- value[i]
+      }
+      soil.node[[1]]$Children[wswimn][[1]] <- soil.swim.node
+    }
+    
     core.zone.node[wsn] <- soil.node
   }
   
@@ -472,29 +548,70 @@ edit_apsimx <- function(file, src.dir = ".", wrt.dir = NULL,
     if(length(parm) != 2)
       stop("'parm' should be a list of length 2. The first should be the line and the second should be the component", call. = FALSE)
     
-    if(length(parm[[1]]) != length(value))
-      stop("lenght of the first 'parm' element should be equal to the length of 'value'", call. = FALSE)
+    if(all(parm[[1]] > 0)){
+      if(length(parm[[1]]) != length(value))
+        stop("lenght of the first 'parm' element should be equal to the length of 'value'", call. = FALSE)      
+    }
+
+    length.operation <- length(operations.node[[1]]$Operation)
     
-    if(parm[[2]] == "Date"){
-      for(i in seq_along(value)){
-        operations.node[[1]]$Operation[[parm[[1]][i]]]$Date <- value[i]    
+    if(all(parm[[1]] > 0)){
+      if(parm[[2]] == "Date"){
+        for(i in seq_along(value)){
+          date.exists <- try(operations.node[[1]]$Operation[[parm[[1]][i]]]$Date, silent = TRUE)
+          if(!inherits(date.exists, 'try-error')){
+            operations.node[[1]]$Operation[[parm[[1]][i]]]$Date <- value[i]      
+          }else{
+            ## Need to add Date if not present 
+            ##stop("Adding a row is not available yet", call. = FALSE)
+            if(verbose) cat("Added a new 'Date' element in position", parm[[1]][i], "\n")
+            input.list <- vector("list", length = 1) ## Create empty list
+            list.elements <- operations.node[[1]]$Operation[[1]] ## Copying the first one
+            list.elements$Date <- value[i] ## replacing Date
+            list.elements$Action <- "" 
+            list.elements$Line <- ""
+            input.list[[1]] <- list.elements
+            operations.node[[1]]$Operation <- append(operations.node[[1]]$Operation, input.list) 
+          }
+        }
+      }
+      
+      if(parm[[2]] == "Action"){
+        for(i in seq_along(value)){
+          action.exists <- try(operations.node[[1]]$Operation[[parm[[1]][i]]]$Action, silent = TRUE)
+          if(!inherits(action.exists, 'try-error')){
+            operations.node[[1]]$Operation[[parm[[1]][i]]]$Action <- value[i]      
+          }else{
+            stop("Trying to edit an 'Action' item but it is not present. Add 'Date' first.", call. = FALSE)
+          }
+        }
+      }
+      
+      if(parm[[2]] == "Line"){
+        for(i in seq_along(value)){
+          line.exists <- try(operations.node[[1]]$Operation[[parm[[1]][i]]]$Date, silent = TRUE)
+          if(!inherits(line.exists, 'try-error')){
+            operations.node[[1]]$Operation[[parm[[1]][i]]]$Line <- value[i]      
+          }else{
+            stop("Trying to edit a 'Line' item but it is not present. Add 'Date' first.", call. = FALSE)
+          }
+        }
+      }      
+    }else{
+      ### In this case the format should be parm = list(-10, 'NA')
+      if(!is.na(parm[[2]][1]))
+        stop("Second element of the 'parm' list should be 'NA'", call. = FALSE)
+      
+      for(i in rev(seq_along(parm[[1]]))){
+        idx.rm <- abs(parm[[1]][i])
+        operations.node[[1]]$Operation[[idx.rm]] <- NULL      
       }
     }
-    
-    if(parm[[2]] == "Action"){
-      for(i in seq_along(value)){
-        operations.node[[1]]$Operation[[parm[[1]][i]]]$Action <- value[i]    
-      }
+      
+    if(all(parm[[1]] > 0)){
+      if(!parm[[2]] %in% c("Date", "Action", "Line"))
+        stop("The second 'parm' component should be either 'Date', 'Action', or 'Line'", call. = FALSE)      
     }
-    
-    if(parm[[2]] == "Line"){
-      for(i in seq_along(value)){
-        operations.node[[1]]$Operation[[parm[[1]][i]]]$Line <- value[i]    
-      }
-    }
-    
-    if(!parm[[2]] %in% c("Date", "Action", "Line"))
-      stop("The second 'parm' component should be either 'Date', 'Action', or 'Line'", call. = FALSE)
 
     core.zone.node[won][[1]]$Operation <- operations.node[[1]]$Operation
     parm <- unlist(parm)

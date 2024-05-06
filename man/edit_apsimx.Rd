@@ -11,7 +11,7 @@ edit_apsimx(
   node = c("Clock", "Weather", "Soil", "SurfaceOrganicMatter", "MicroClimate", "Crop",
     "Manager", "Report", "Operations", "Other"),
   soil.child = c("Metadata", "Water", "SoilWater", "Organic", "Physical", "Analysis",
-    "Chemical", "InitialWater", "Sample"),
+    "Chemical", "InitialWater", "Sample", "Swim3"),
   manager.child = NULL,
   parm = NULL,
   value = NULL,
@@ -65,12 +65,16 @@ is a list that has the same number of elements as the length of the vector \code
 \sQuote{file} \emph{-edited.apsimx} will be created.  If (verbose = TRUE) then the name
  of the written file is returned. 
  
- When node equals Report, the editing allows to add variables, but not to remove them at the moment.
+ When node equals \sQuote{Report}, the editing allows to add variables, but not to remove them at the moment.
 
  When node equals Operations, \sQuote{parm} should have a list with two elements. The first should be the line(s) to edit and 
  the second should be the component(s) to edit. Either \sQuote{Date}, \sQuote{Action} or \sQuote{Line}.
  When more than one line is edited, \sQuote{value} should be a character vector of the same length as the number of
- lines to edit.
+ lines to edit. It is possible to remove, say, line 10 by using \sQuote{parm = list(-10, NA)}. It is safer to remove
+ lines at the end of \sQuote{Operations}. To remove several use the following \sQuote{parm = list(-c(10:12), NA)}. 
+ This assumes that \sQuote{12} is the maximum number of lines present. Trying to remove lines in the middle will have 
+ unexpected effects. It is possible to create additional lines, but only by using \sQuote{Date} first. This feature
+ has not been tested much so use it carefully.
 }
 \examples{
 \donttest{

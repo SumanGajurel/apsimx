@@ -12,7 +12,7 @@
 
 <meta name="author" content="Fernando Miguez" />
 
-<meta name="date" content="2024-01-28" />
+<meta name="date" content="2024-05-06" />
 
 <title>Sensitivity Analysis</title>
 
@@ -340,7 +340,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Sensitivity Analysis</h1>
 <h4 class="author">Fernando Miguez</h4>
-<h4 class="date">2024-01-28</h4>
+<h4 class="date">2024-05-06</h4>
 
 
 <div id="TOC">
@@ -455,20 +455,21 @@ parameters to be evaluated. This can be obtained by using
 <strong>inspect_apsimx</strong> or <strong>inspect_apsim_json</strong>.
 The length of the parameter vector should be equal to the number of
 parameters being evaluated (sometimes less is more).</p></li>
-<li><p>parm.vector.index = some paths point to a vector of parameters,
-but sometimes only one element of that vector needs to be evaluated. In
-this case provide the index for which element of the vector needs to be
-evaluated. If some of the parameters need this index while others do
-not, include a zero for those parameter vectors which are not
-indexed.</p></li>
+<li><p>convert = whether to convert strings to numeric</p></li>
 <li><p>replacement = logical indicating whether each parameter is in the
 replacement component or not.</p></li>
 <li><p>grid = data frame with combinations of parameters to be
 evaluated.</p></li>
+<li><p>soil.profiles = soil profiles, which can be passed as a
+list</p></li>
 <li><p>summary = optional summary function to apply if the APSIM output
 returns multiple rows. The mean is used by default.</p></li>
 <li><p>root = indicate the root simulation in case it is not the default
 one.</p></li>
+<li><p>verbose = printing progress and other details</p></li>
+<li><p>cores = number of cores to use. The package ‘future’ is currently
+used.</p></li>
+<li><p>save = whether to save intermediate (and final) results.</p></li>
 <li><p>… = additional arguments (none used at the moment).</p></li>
 </ul>
 </div>
@@ -481,7 +482,7 @@ one.</p></li>
 <li>Create a simple grid for evaluating the model</li>
 </ol>
 <p>Here the grid is created using <em>expand.grid</em> and it has 9
-rows. This means that this while require 9 simulation runs of the APSIM
+rows. This means that this will require 9 simulation runs of the APSIM
 model. This takes a couple of minutes to run. The resulting object is of
 class <em>sens_apsim</em> and it can be investigated using the
 <em>summary</em> function (for now).</p>
@@ -548,12 +549,12 @@ methods are available. For this task, the package
 ##  [1,]        100      152.5
 ##  [2,]        100        5.0
 ##  [3,]        200        5.0
-##  [4,]          0      300.0
-##  [5,]          0      152.5
-##  [6,]        100      152.5
+##  [4,]        100      152.5
+##  [5,]        200      152.5
+##  [6,]        200      300.0
 ##  [7,]        100      300.0
-##  [8,]          0      300.0
-##  [9,]          0      152.5</code></pre>
+##  [8,]        100      152.5
+##  [9,]        200      152.5</code></pre>
 <p>The sensitivity package allows for decoupling the simulation runs and
 the analysis of the results. For example:</p>
 <div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="do">## This takes 2-3 minutes</span></span>

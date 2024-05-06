@@ -2,48 +2,44 @@
 % Please edit documentation in R/get_worldmodeler_soil_profile.R
 \name{get_worldmodeler_soil_profile}
 \alias{get_worldmodeler_soil_profile}
-\title{Generate a synthetic APSIM soil profile from the World Modeler database}
+\title{Obtain a synthetic APSIM soil profile from the World Modeler database}
 \usage{
 get_worldmodeler_soil_profile(
   lonlat,
-  fix = FALSE,
-  check = FALSE,
   soil.name,
-  verbose = FALSE,
-  cleanup = FALSE
+  wrt.dir,
+  filename,
+  verbose = FALSE
 )
 }
 \arguments{
 \item{lonlat}{Longitude and latitude vector (e.g. c(-93, 42)) or matrix.}
 
-\item{fix}{whether to attempt to fix issues with the profile}
-
-\item{check}{whether to check the soil profile}
-
 \item{soil.name}{optional soil name}
 
-\item{verbose}{default is FALSE}
+\item{wrt.dir}{optional directory where to save a file with \sQuote{soils} extension.
+If missing it will be written to a temporary directory.}
 
-\item{cleanup}{whether to delete temporary files}
+\item{filename}{optional name to be used when saving the file}
+
+\item{verbose}{verbose argument passed to \sQuote{read_apsim_soils}}
 }
 \value{
-it generates an object of class \sQuote{soil_profile}.
+it returns a list with objects of class \sQuote{soil_profile}. If
+\sQuote{filename} is specified it also creates a file with extension \sQuote{soils}, 
+which can be read using function \code{\link{read_apsim_soils}}.
 }
 \description{
-Retrieves soil data from the World Modeler global database and converts it to an apsimx soil_profile object
+Retrieves soil data from the World Modeler global database and (optionally) saves it to a soils file
 }
 \examples{
 \dontrun{
 ## Get soil profile properties for a single point
-## This causes a fatal error at the moment
-## This is why I don't run it
-if(FALSE){
-  sp1 <- get_worldmodeler_soil_profile(lonlat = c(-93, 42), fix = TRUE, verbose = FALSE)
-
-  ## Visualize
-  plot(sp1)
-  plot(sp1, property = "water")
-}
+  sp1 <- get_worldmodeler_soil_profile(lonlat = c(-93, 42))
+  
+  if(inherits(sp1[[1]], 'soil_profile')){
+    plot(sp1[[1]], property = "Carbon")
+  }
 }
 }
 \author{

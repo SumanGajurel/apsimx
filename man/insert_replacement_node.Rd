@@ -9,12 +9,9 @@ insert_replacement_node(
   src.dir,
   wrt.dir,
   rep.node,
-  rep.node.position = 1,
-  new.core.position = rep.node.position + 1,
   edit.tag = "-edited",
   overwrite = FALSE,
-  verbose = TRUE,
-  root
+  verbose = FALSE
 )
 }
 \arguments{
@@ -26,18 +23,11 @@ insert_replacement_node(
 
 \item{rep.node}{replacement node as obtained by the \code{\link{get_apsimx_json}} function}
 
-\item{rep.node.position}{position where the replacement node will be inserted, default is 1}
-
-\item{new.core.position}{this by default will place the core simulation below the replacement node position. 
-With this option, this can be modified.}
-
 \item{edit.tag}{if the file is edited a different tag from the default \sQuote{-edited} can be used.}
 
 \item{overwrite}{logical; if \code{TRUE} the old file is overwritten, a new file is written otherwise}
 
 \item{verbose}{whether to print information about successful edit}
-
-\item{root}{supply the node postion in the case of multiple simulations such as factorials.}
 }
 \value{
 it does not return an R object but it writes an apsimx file to disk
@@ -47,12 +37,15 @@ Inserts a replacement node in a simple apsimx simulation file
 }
 \examples{
 \dontrun{
-tmp.dir <- tempdir()
-wheat <- get_apsimx_json(model = "Wheat", wrt.dir = tmp.dir)
-extd.dir <- system.file("extdata", package = "apsimx")
-insert_replacement_node("Wheat.apsimx", 
-                        src.dir = extd.dir, wrt.dir = tmp.dir,
-                        rep.node = wheat)
+## It is not trivial to produce a reproducible example
+## because the model and file versions need to align.
+## The steps are:
+## 1. Get model: 
+##    wheat <- get_apsimx_json(model = "Wheat", wrt.dir = tmp.dir)
+## 2. Create file that matches current model version
+## 3. Edit the file by inserting the 'replacements' node
+##    insert_replacement_node("Wheat.apsimx", rep.node = wheat)
+                        
 }
 
 }

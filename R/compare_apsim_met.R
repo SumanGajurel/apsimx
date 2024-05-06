@@ -356,7 +356,7 @@ plot.met_mrg <- function(x, ..., plot.type = c("vs", "diff", "ts", "density"),
 #' @name summary.met
 #' @description Create a data.frame summarizing an object of class \sQuote{met}
 #' @param object object of class \sQuote{met}
-#' @param ... optional argument (none used at the momemt) 
+#' @param ... optional argument (none used at the moment) 
 #' @param years optional argument to subset years
 #' @param months optional argument to subset by months. If an integer, it should
 #' be between 1 and 12. If a character, it can be in the format, for example, 
@@ -370,6 +370,8 @@ plot.met_mrg <- function(x, ..., plot.type = c("vs", "diff", "ts", "density"),
 #' frost statistics.
 #' @param frost.temperature value to use for the calculation of the frost 
 #' period (default is zero).
+#' @param anomaly whether to compute the anomaly. Default is FALSE. 
+#' It could be TRUE (for all variables) or a character vector for a specific set of variables.
 #' @param check logical (default FALSE). Whether to \sQuote{check} the \sQuote{met} object.
 #' @param verbose whether to print additional infomation to the console
 #' @param na.rm whether to remove missing values. Passed to \sQuote{aggregate}
@@ -386,6 +388,7 @@ plot.met_mrg <- function(x, ..., plot.type = c("vs", "diff", "ts", "density"),
 summary.met <- function(object, ..., years, months, days, julian.days,
                         compute.frost = FALSE,
                         frost.temperature = 0, 
+                        anomaly,
                         check = FALSE, verbose = FALSE, 
                         na.rm = FALSE, digits = 2){
   
@@ -396,7 +399,10 @@ summary.met <- function(object, ..., years, months, days, julian.days,
     stop("Either use days or julian.days but not both", call. = TRUE)
 
   ## Summarize information by year
-  if(!missing(years)) x <- x[x$year %in% years,]
+  if(!missing(years)){
+    #### Error message if years outside the range
+    x <- x[x$year %in% years,]
+  } 
   
   if(!missing(months)){
     if(length(months) == 1) months <- as.integer(months)
@@ -408,7 +414,7 @@ summary.met <- function(object, ..., years, months, days, julian.days,
                       Month = format(date.range, "%b"),
                       day = as.numeric(format(date.range, "%j")))
     if(inherits(months, "integer")){
-      if(months < 1 || months > 12)
+      if(any(months < 1) || any(months > 12))
         stop("months should be between 1 and 12", call. = FALSE)
       wch.months <- which(dat$month %in% months)
       x <- x[x$day %in% dat[wch.months, "day"],]
@@ -426,7 +432,7 @@ summary.met <- function(object, ..., years, months, days, julian.days,
   if(!missing(days)){
     if(!inherits(days, "integer"))
       stop("days should be of class integer", call. = FALSE)
-    if(days < 1 || days > 31)
+    if(any(days < 1) || any(days > 31))
       stop("days should be between 1 and 31")
     ## Select days that fit the criteria
     date.range <- seq(as.Date("2012-01-01"), as.Date("2012-12-31"), by = "day")
@@ -704,6 +710,36 @@ summary.met <- function(object, ..., years, months, days, julian.days,
                        "rain_sum", "radn_sum", "radn_avg") ## 10, 11, 12
   }
 
+  #### Calculate anomalies ----
+  if(!missing(anomaly)){
+
+    vars.to.anomaly <- setdiff(colnames(ans), c("year", "months", "days"))
+    #### This computes anomalies for all variables
+    if(!isTRUE(anomaly)){
+      v2a <- intersect(anomaly, vars.to.anomaly)
+      if(length(v2a) == 0){
+        v2a <- lapply(anomaly, function(x) grep(x, vars.to.anomaly, value = TRUE))
+        if(length(v2a) == 0){
+          stop("anomaly variable does not match an existing variable")  
+        }else{
+         vars.to.anomaly <- unlist(v2a) 
+        }
+      }else{
+        vars.to.anomaly <- anomaly        
+      }
+    }
+
+    for(i in vars.to.anomaly){
+      tmp.var.to.anomaly <- as.data.frame(ans)[[i]]
+      mean.i.var.to.anomaly <- mean(tmp.var.to.anomaly, na.rm = TRUE)
+      prct.change <- ((tmp.var.to.anomaly / mean.i.var.to.anomaly) - 1) * 100
+      name.i.var <- paste0("anomaly_", i)
+      tmpd <- data.frame(anomaly = prct.change)
+      names(tmpd) <- name.i.var
+      ans <- cbind(ans, tmpd)
+    }
+  }
+  
   ansd <- as.data.frame(ans)
   if(inherits(months, "integer")){
     if(grepl(":", deparse(months), fixed = TRUE)){

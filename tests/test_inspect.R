@@ -457,8 +457,125 @@ if(inspect.replacement.test.parm.path){
                                       print.path = TRUE)
     
     ### Need to look at whether I can edit this
-    
-    
   }
 }
 
+#### Test inspect Other ----
+inspect.factorial.test.parm.path <- get(".run.local.tests", envir = apsimx.options)
+
+if(inspect.factorial.test.parm.path){
+  
+  tmp.dir <- tempdir()
+  dir(tmp.dir)
+  ex.dir <- auto_detect_apsimx_examples()
+  
+  ### Test with all examples
+  ex.dir.list <- dir(ex.dir, recursive = FALSE, pattern = "apsimx$")
+
+  ## Trying node = "Other"
+  for(i in ex.dir.list){
+    if(!file.exists(file.path(tmp.dir, i))) file.copy(from = file.path(ex.dir, i), to = tmp.dir)  
+    cat("Simulation:", i, "\n")
+    inspect_apsimx(i, src.dir = tmp.dir, node = "Other")  
+    cat("\n")
+  }
+  
+  for(i in ex.dir.list){
+    cat("Simulation:", i, "\n")
+    inspect_apsimx(i, src.dir = tmp.dir, node = "Other", parm = 2)  
+  }
+  
+  for(i in ex.dir.list){
+    ## file.copy(from = file.path(ex.dir, i), to = tmp.dir)  
+    cat("Simulation:", i, "\n")
+    inspect_apsimx(i, src.dir = tmp.dir, node = "Other", parm = 3)  
+  }
+  
+  ## Next need to test if inspect_apsimx works well when parm is a string
+  ## pp <- inspect_apsimx(i, src.dir = tmp.dir, node = "Other", parm = list(".Simulations.AgPastureExample.Field"))
+  ## Would like to implement list(1, 2, 3)
+  i <- "AgPasture.apsimx"
+  inspect_apsimx(i, src.dir = tmp.dir, node = "Other", parm = list(1, 3), print.path = TRUE)
+  inspect_apsimx(i, src.dir = tmp.dir, node = "Other", parm = list(1, 0))
+  inspect_apsimx(i, src.dir = tmp.dir, node = "Other", parm = list(1, 1:3))
+  inspect_apsimx(i, src.dir = tmp.dir, node = "Other", parm = list(1, c(3, 5)))
+  inspect_apsimx(i, src.dir = tmp.dir, node = "Other", parm = list(1, c(3, 5)), print.path = TRUE)
+  inspect_apsimx(i, src.dir = tmp.dir, node = "Other", parm = list(1, 3, 0))
+  inspect_apsimx(i, src.dir = tmp.dir, node = "Other", parm = list(1, 3, 5, 8, 0))
+  inspect_apsimx(i, src.dir = tmp.dir, node = "Other", parm = list(1, 3, 5, 1, 0))
+  inspect_apsimx(i, src.dir = tmp.dir, node = "Other", parm = list(1, 3, 5, 1, 3), print.path = TRUE)
+  pp <- inspect_apsimx(i, src.dir = tmp.dir, node = "Other", parm = ".Simulations.AgPasture.Field", print.path = TRUE)
+  i <- "WhiteClover.apsimx"
+  inspect_apsimx(i, src.dir = tmp.dir, node = "Other", parm = 3)
+  inspect_apsimx(i, src.dir = tmp.dir, node = "Other", parm = list(1, 2, 5, 6, 0))
+  inspect_apsimx(i, src.dir = tmp.dir, node = "Other", parm = ".Simulations.Simulation.Field")
+  ## Developing/Testing list/grep
+  ## This should work for SimpleGrazing and it doesn't at the moment
+  i <- "AgPasture.apsimx"
+  inspect_apsimx(i, src.dir = tmp.dir, node = "Other", parm = list(1, 3, 5, 1, 0)) 
+  (pp <- inspect_apsimx(i, src.dir = tmp.dir, node = "Other", parm = list(1, 3, 5, 1, 2), print.path = TRUE))
+  rootp <- inspect_apsimx(i, src.dir = tmp.dir, node = "Other", parm = list(1, 3))
+  rut <- strsplit(rootp, ".", fixed = TRUE)[[1]][3]
+  # inspect_apsimx(i, src.dir = tmp.dir, node = "Other", root = rut,
+  #               parm = list("SimpleGrazingFrequencyString"))
+  inspect_apsimx(i, src.dir = tmp.dir, node = "Other",
+                 parm = list("AgPastureExample.SimpleGrazingFrequencyString"))
+  ## These examples below do not work well (yet)
+  ##inspect_apsimx(i, src.dir = tmp.dir, node = "Other", 
+  ##              parm = list("AgPastureExample", "SimpleGrazingFrequencyString")) 
+   
+  ## inspect_apsimx(i, src.dir = tmp.dir, root = "AgPastureExample", node = "Other") 
+  ##inspect_apsimx(i, src.dir = tmp.dir, root = "AgPastureExample", 
+  ##                node = "Other", parm = list("SimpleGrazingFrequencyString", "SimpleGrazingResidual"))
+  
+  ## This works now, but not for all parameters, not sure why
+  inspect_apsimx_json(i, src.dir = tmp.dir, parm = "AgPastureExample.SimpleGrazingFrequencyString")
+  inspect_apsimx_json(i, src.dir = tmp.dir, parm = "AgPastureExample.SimpleMinGrazable")
+  inspect_apsimx_json(i, src.dir = tmp.dir, parm = "AgPastureExample.GrazingRotationType")
+  
+  
+  ## Inspect Replacement version
+  inspect_apsimx_replacement(i, src.dir = tmp.dir,
+                             root = list("AgPastureExample", 2),
+                             display.available = TRUE)
+  
+  pp <- inspect_apsimx_replacement(i, src.dir = tmp.dir,
+                                   root = list("AgPastureExample", 2),
+                                   node = "Field",
+                                   node.child = "SimpleGrazing",
+                                   parm = "SimpleGrazingFrequencyString",
+                                   display.available = TRUE,
+                                   verbose = FALSE)
+  
+  inspect_apsimx("Factorial.apsimx", src.dir = tmp.dir,
+                 root = list("RangeExperiment", "Base1"),
+                 node = "Soil",
+                 soil.child = "Physical",
+                 print.path = TRUE)
+  
+  inspect_apsimx_replacement("Factorial.apsimx", src.dir = tmp.dir,
+                             root = list("RangeExperiment"),
+                             display.available = TRUE,
+                             print.path = TRUE)
+
+  # inspect_apsimx_json("Factorial.apsimx", src.dir = tmp.dir,
+  #                     parm = "Clock",
+  #                     print.path = TRUE)
+  
+  inspect_apsimx_json("Factorial.apsimx", src.dir = tmp.dir,
+                      parm = "Permutation",
+                      print.path = TRUE)
+  
+
+  inspect_apsimx_json("AgPasture.apsimx", src.dir = tmp.dir,
+                 parm = "CO2xBaseTemperature",
+                 print.path = TRUE)
+  
+  inspect_apsimx("AgPasture.apsimx", src.dir = tmp.dir,
+                 root = list("CO2xBaseTemperature", "CO2xTb"),
+                 print.path = TRUE)
+
+  inspect_apsimx("AgPasture.apsimx", src.dir = tmp.dir,
+                 root = list("PastureByWaterAndNitrogen", "Base"),
+                 print.path = TRUE)
+}

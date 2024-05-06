@@ -12,7 +12,7 @@
 
 <meta name="author" content="Fernando Miguez" />
 
-<meta name="date" content="2024-01-28" />
+<meta name="date" content="2024-05-06" />
 
 <title>apsimx: An R package for APSIM Next Generation (and Classic)</title>
 
@@ -341,7 +341,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <h1 class="title toc-ignore">apsimx: An R package for APSIM Next
 Generation (and Classic)</h1>
 <h4 class="author">Fernando Miguez</h4>
-<h4 class="date">2024-01-28</h4>
+<h4 class="date">2024-05-06</h4>
 
 
 <div id="TOC">
@@ -441,11 +441,10 @@ recommended that you become familiar with it before hand.</p>
 <p><a href="https://www.sciencedirect.com/science/article/pii/S1364815217311921">Holzworth
 et al. (2018)</a></p>
 <p>This package has been tested on (latest version):</p>
-<p><strong>Mac</strong>: ApsimX version (2023-12-10) 7349 (R 4.3.0)</p>
-<p><strong>Debian</strong>: ApsimX version (2023-12-12) 7350 (R
-4.3.0)</p>
-<p><strong>Windows</strong>: ApsimX version (2023-12-13) 7353 and APSIM
-Classic 7.10-r4207 (R 3.6.2)</p>
+<p><strong>Mac</strong>: ApsimX version (2024-02) 7382 (R 4.3.0)</p>
+<p><strong>Debian</strong>: ApsimX version (2024-02) 7382 (R 4.1.2)</p>
+<p><strong>Windows</strong>: ApsimX version (2024-02) 7382 and APSIM
+Classic 7.10-r4221 (R 4.3.3)</p>
 </div>
 <div id="installing-apsim-next-generation" class="section level2">
 <h2>Installing APSIM (Next Generation)</h2>
@@ -456,9 +455,9 @@ mono (<a href="https://www.mono-project.com/download/stable/" class="uri">https:
 download and install APSIM (<a href="https://www.apsim.info/download-apsim/downloads/" class="uri">https://www.apsim.info/download-apsim/downloads/</a>).
 <strong>NOTE</strong>: If you are using a version of APSIM Next Gen
 released after Sep 2021, you do <strong>not</strong> need to install
-mono. You will need the .NET Runtime 6.0 for Linux or Mac (<a href="https://dotnet.microsoft.com/en-us/download/dotnet/6.0" class="uri">https://dotnet.microsoft.com/en-us/download/dotnet/6.0</a>).
-The <strong>apsimx</strong> package will try to detect both mono and
-APSIM (Classic and Next Generation).</p>
+mono. You will need the .NET Runtime 6.0 for Linux or Mac (<a href="https://dotnet.microsoft.com" class="uri">https://dotnet.microsoft.com</a>, -&gt; download -&gt;
+dotnet -&gt; 6.0). The <strong>apsimx</strong> package will try to
+detect both mono and APSIM (Classic and Next Generation).</p>
 <p><strong>Mac</strong>: For Mac it is also assumed that APSIM has been
 moved to ‘Applications’.</p>
 <p><strong>Windows</strong>: In Windows the default install location is
@@ -506,7 +505,8 @@ executable, examples and warnings.</li>
 <li><strong>edit_apsim_xml</strong> edit an XML file such as Maize.xml
 or Soil.xml</li>
 </ul>
-<p>See also ‘optim’ vignette for optimization options.</p>
+<p>See also ‘optim’ vignette for optimization options and ‘sensitivity’
+vignette for sensitivity analysis.</p>
 </div>
 </div>
 <div id="using-apsimx" class="section level1">
@@ -563,13 +563,15 @@ this was to be able to verify from within R that if I edited an APSIM(X)
 file, the editing worked as expected. The second use of ‘inspect’ is to
 be able to understand the structure of ‘apsim’ files better. A third
 useful aspect of ‘inspect’ is that it can be used to supply the path for
-a parameter that will be later edited. Another benefit of the inpspect
-functions is that if you are running APSIM in a cluster, you do not have
-access to the GUI, so these functions allow you to inspect your files in
-that environment. In addition, having this functionality within R allows
-to make these tasks repeatable. For complex inspections and
-manipulations of an .apsim(x) file the GUI is recommended. However, this
-package is designed to work with relatively simple .apsim(x) files.</p>
+a parameter that will be later edited. Another benefit of the inspect
+functions is that if you are running APSIM in a Linux cluster, you do
+not have access to the GUI, so these functions allow you to inspect your
+files in that environment. In addition, having this functionality within
+R allows to make these tasks repeatable. For complex inspections and
+manipulations of an .apsim(x) file the GUI is recommended. This package
+was originally designed to work with relatively simple .apsim(x) files,
+but functionality has evolved and it can handle more complex
+simulations.</p>
 </div>
 <div id="inspecting-and-editing-the-maize-example" class="section level2">
 <h2>Inspecting and Editing the ‘Maize’ example</h2>
@@ -878,7 +880,7 @@ node should be “Other”.</p>
 <pre><code>## Edited /folder/simulation/area/folder/manager[1]/ui/density 
 ## Edited parameter 
 ## New values  8 
-## Created  /var/folders/6j/xksd1tld70q91h73d5s0ln7c0000gn/T//Rtmp4aE5c1/Millet-pp.apsim</code></pre>
+## Created  /var/folders/6j/xksd1tld70q91h73d5s0ln7c0000gn/T//Rtmp3Yt2W9/Millet-pp.apsim</code></pre>
 <p>Verify that it was edited correctly.</p>
 <div class="sourceCode" id="cb39"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" tabindex="-1"></a><span class="fu">inspect_apsim</span>(<span class="st">&quot;Millet-pp.apsim&quot;</span>, <span class="at">src.dir =</span> tmp.dir,</span>
 <span id="cb39-2"><a href="#cb39-2" tabindex="-1"></a>              <span class="at">node =</span> <span class="st">&quot;Manager&quot;</span>,</span>
@@ -911,9 +913,9 @@ node should be “Other”.</p>
 <h2>Inspecting a ‘Replacement’ component</h2>
 <p>Many additional options in an APSIM-X simulation can be realized
 through the use of ‘Replacements’. For this, there is a function that
-allows inspection. For this, it is important to know the structure of
-the ‘replacement’ and explore the available components. For example, if
-we want to display the xy pair for the thermal time in the phenology
+allows inspection. In this case, it is important to know the structure
+of the ‘replacement’ and explore the available components. For example,
+if we want to display the xy pair for the thermal time in the phenology
 component of the ‘Maize’ replacement we might go through the following
 steps:</p>
 <p>State the node (“Maize”) and display available components:</p>
@@ -1144,7 +1146,7 @@ more straight forward.</p>
 ## Edit (level):  6 
 ## Edited parameter:  Y 
 ## New values:  0 12 20 28 0 
-## Created:  /var/folders/6j/xksd1tld70q91h73d5s0ln7c0000gn/T//Rtmp4aE5c1/MaizeSoybean-edited.apsimx</code></pre>
+## Created:  /var/folders/6j/xksd1tld70q91h73d5s0ln7c0000gn/T//Rtmp3Yt2W9/MaizeSoybean-edited.apsimx</code></pre>
 <p>Let’s inspect the edited file</p>
 <div class="sourceCode" id="cb60"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb60-1"><a href="#cb60-1" tabindex="-1"></a><span class="fu">inspect_apsimx_replacement</span>(<span class="st">&quot;MaizeSoybean-edited.apsimx&quot;</span>, </span>
 <span id="cb60-2"><a href="#cb60-2" tabindex="-1"></a>                           <span class="at">src.dir =</span> tmp.dir,</span>
@@ -1232,7 +1234,7 @@ take the ‘Factorial’ example:</p>
 ## no node sub-children available or parm not equal to null</code></pre>
 <p>Here we stop at this level but it is possible to dig deeper using
 ‘node.subchild’ and ‘node.subsubchild’. It is not possible at this point
-to dig deeper than ‘node.subsubchild’ in the hierarchy level.</p>
+to dig deeper than ‘node.sub5child’ in the hierarchy level.</p>
 <p>The <strong>inspect_apsimx</strong> function can also handle
 factorials.</p>
 <div class="sourceCode" id="cb72"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb72-1"><a href="#cb72-1" tabindex="-1"></a><span class="fu">inspect_apsimx</span>(<span class="st">&quot;Factorial.apsimx&quot;</span>, <span class="at">src.dir =</span> extd.dir)</span>
@@ -1266,7 +1268,7 @@ file we can use the following example.</p>
 ## Edited (child):  none 
 ## Edited parameters:  
 ## New values:  Ames.met 
-## Created:  /var/folders/6j/xksd1tld70q91h73d5s0ln7c0000gn/T//Rtmp4aE5c1/Factorial-edited.apsimx</code></pre>
+## Created:  /var/folders/6j/xksd1tld70q91h73d5s0ln7c0000gn/T//Rtmp3Yt2W9/Factorial-edited.apsimx</code></pre>
 <p>I won’t be running the ‘Factorial’ example here, but if you are
 interested this is done in the folder ‘tests’ in the pacakge source.</p>
 </div>
@@ -1306,6 +1308,8 @@ to disk.</li>
 Environmental Mesonet</li>
 <li><strong>get_iemre_apsim_met</strong>: Fetch data from Iowa
 Environmental Mesonet Reanalysis</li>
+<li><strong>get_worldmodeler_apsim_met</strong>: Fetch data from CSIRO
+Worldmodeler</li>
 <li><strong>plot</strong> plotting method for objects of class
 ‘met’.</li>
 <li><strong>summary</strong> summary method for objects of class
@@ -1347,7 +1351,7 @@ concrete tutorial at some point.</p>
 <p>In addition, there are is a function to compare soil profiles
 <strong>compare_apsim_soil_profile</strong>, which can be used to
 compare, numerically, one or more soil profiles and a
-<strong>plot</strong> method to visually comapre this object.</p>
+<strong>plot</strong> method to visually compare this object.</p>
 </div>
 </div>
 <div id="file-type-or-file-format-details" class="section level1">

@@ -32,6 +32,7 @@
 #' @param data data frame with the observed data. By default is assumes there is a 'Date' column for the index.
 #' @param type Type of optimization. For now, \code{\link[stats]{optim}}, and, if available, \code{\link[nloptr]{nloptr}} or 
 #' \sQuote{mcmc} through \code{\link[BayesianTools]{runMCMC}}. Option \sQuote{ucminf} uses the \code{\link[ucminf]{ucminf}} function.
+#' If \sQuote{type} is \sQuote{grid}, then a grid can be passed and no optimization will be performed.
 #' @param weights Weighting method or values for computing the residual sum of squares. 
 #' @param index Index for filtering APSIM output. Typically, \dQuote{Date}, but it can be c(\dQuote{report}, \dQuote{Date}) for 
 #' multiple simulations
@@ -45,6 +46,8 @@
 #' If the parameters to be optimized correspond to a single value, then a simple numeric vector can be supplied.
 #' If one or more of the parameters represent a vector in APSIM, then the initial values should be passed as a
 #' list. At the moment, it is not possible to check if these are appropriate (correct name and length). 
+#' @param grid grid used when \sQuote{type = grid}. Columns should be parameters and rows different values for 
+#' those parameters.
 #' @param ... additional arguments to be passed to the optimization algorithm. See \code{\link[stats]{optim}}
 #' @note When computing the objective function (residual sum-of-squares) different variables are combined.
 #' It is common to weight them since they are in different units. If the argument weights is not supplied
@@ -59,13 +62,14 @@
 
 optim_apsimx <- function(file, src.dir = ".", 
                          parm.paths, data, 
-                         type = c("optim", "nloptr", "mcmc", "ucminf"), 
+                         type = c("optim", "nloptr", "mcmc", "ucminf", "grid"), 
                          weights, 
                          index = "Date",
                          parm.vector.index,
                          replacement,
                          root,
                          initial.values,
+                         grid,
                          ...){
   
   .check_apsim_name(file)
@@ -154,8 +158,8 @@ optim_apsimx <- function(file, src.dir = ".",
   iparms <- vector("list", length = length(parm.paths))
   names(iparms) <- parm.paths
   
-  if(missing(initial.values))
-    stop("Initial values should be supplied. (Working on a fix for this)", call. = FALSE)
+#  if(missing(initial.values))
+#    stop("Initial values should be supplied. (Working on a fix for this)", call. = FALSE)
   
   ## How do I retrieve the current value I want to optimize?
   for(i in seq_along(parm.paths)){
@@ -187,7 +191,7 @@ optim_apsimx <- function(file, src.dir = ".",
   }
   
   obj_fun <- function(cfs, parm.paths, data, iparms, weights,
-                      index, parm.vector.index, replacement, root){
+                      index, parm.vector.index, replacement, root, gpi){
     
     ## Need to edit the parameters in the simulation file or replacement
     for(i in seq_along(cfs)){
@@ -225,9 +229,21 @@ optim_apsimx <- function(file, src.dir = ".",
     }
     
     ## Run simulation  
-    sim <- try(apsimx(file = file, src.dir = src.dir,
-                     silent = TRUE, cleanup = TRUE, value = "report"),
-               silent = TRUE)
+    if(missing(gpi)){
+      sim <- try(apsimx(file = file, src.dir = src.dir,
+                        silent = TRUE, cleanup = TRUE, value = "report"),
+                 silent = TRUE)      
+    }else{
+      new.file.name <- paste0(tools::file_path_sans_ext(file), "-", gpi, ".apsimx")
+      file.copy(from = file.path(src.dir, file),
+                to = file.path(src.dir, new.file.name))
+      xrgs <- xargs_apsimx(single.threaded = TRUE, cpu.count = 1L)
+      sim <- try(apsimx(file = new.file.name, src.dir = src.dir,
+                        silent = TRUE, cleanup = TRUE, xargs = xrgs,
+                        value = "report"),
+                 silent = TRUE)      
+    }
+
     
     if(inherits(sim, "try-error")) return(NA)
     
@@ -345,6 +361,158 @@ optim_apsimx <- function(file, src.dir = ".",
     op$value <- op$objective 
     op$convergence <- op$status
   }
+
+  #### Developing grid ----  
+  if(type == "grid"){
+    
+    if(missing(grid))
+      stop("'grid' is required when 'type' = 'grid'", call. = FALSE)
+    
+    grid <- as.data.frame(grid)
+    oiparms <- iparms ## Original initial parameters
+    
+    if(ncol(grid) != length(parm.paths))
+      stop("Number of columns in grid should be equal to the number of parameters")
+    
+    ## Check that the name in the grid appears somewhere in the parameter path
+    for(.ii in seq_along(parm.paths)){
+      is.dot.present <- grepl(".", names(grid)[.ii], fixed = TRUE)
+      if(is.dot.present){
+        ## The first element should match simulation names
+        fspe <- strsplit(names(grid)[.ii], ".", fixed = TRUE)[[1]] 
+        ## First and second parameter elements
+        apsimx_json <- jsonlite::read_json(file.path(src.dir, file))
+        simulation.names <- sapply(apsimx_json$Children, FUN = function(x) x$Name)
+        ippgn1 <- grepl(fspe[1], parm.paths[.ii], ignore.case = TRUE)
+        if(!ippgn1){
+          cat("Name in first elelment grid name:", fspe[1], "\n")
+          cat("parameter name", parm.paths[.ii], "\n")
+          warning("names in first element of grid object name do not match parameter path name")  
+        }
+        ippgn2 <- grepl(fspe[2], parm.paths[.ii], ignore.case = TRUE)
+        if(!ippgn2){
+          cat("Name in second element grid names:", fspe[2], "\n")
+          cat("parameter name", parm.paths[.ii], "\n")
+          warning("names in second element of grid object name do not match parameter path name")  
+        }
+      }else{
+        ippgn <- grepl(names(grid)[.ii], parm.paths[.ii], ignore.case = TRUE)
+        if(!ippgn){
+          cat("Name in grid:", names(grid)[.ii], "\n")
+          cat("parameter name", parm.paths[.ii], "\n")
+          warning("names in grid object do not match parameter path name")  
+        }
+      }
+    }
+    
+    xargs <- list(...)
+    verbose <- FALSE; cores <- 1L
+    if(!is.null(xargs$verbose)){
+      verbose <- ifelse(xargs$verbose, TRUE, FALSE)
+      pb <- utils::txtProgressBar(min = 1, max = nrow(grid), style = 3)
+    }
+    
+    if(!is.null(xargs$cores)){
+      cores <- xargs$cores
+      acores <- parallel::detectCores()
+      if(cores > acores)
+        stop("'cores' argument should be less than the available cores")
+      if(cores > 1){
+        cl <- parallel::makeCluster(cores)
+        ## Unless I rename the file there will be a conflict
+        evars1 <- c('file', 'obj_fun', 'parm.paths', 'data', 'iparms', 'weights')
+        evars2 <- c('index', 'parm.vector.index', 'replacement', 'root')
+        evars3 <- c('grid')
+        parallel::clusterExport(cl, c(evars1, evars2, evars3), 
+                                environment())
+        parallel::clusterEvalQ(cl, {library('apsimx')})
+      }
+    }
+      
+    start <- Sys.time()
+    if(cores == 1L){
+      lrss.vec <- vector("list", length = nrow(grid))
+      for(i in seq_len(nrow(grid))){
+        
+        iparms <- as.list(grid[i, ])
+        lrss <- obj_fun(cfs = rep(1, length(parm.paths)),
+                        parm.paths = parm.paths,
+                        data = data,
+                        iparms = iparms,
+                        weights = weights,
+                        index = index,
+                        parm.vector.index = parm.vector.index,
+                        replacement = replacement,
+                        root = root)
+        lrss.vec[[i]] <- lrss
+        
+        if(isTRUE(verbose)){
+          utils::setTxtProgressBar(pb, i)
+        }
+      }
+      close(pb)
+    }else{
+      lrss.vec <- parallel::parLapply(cl,
+                                      seq_len(nrow(grid)),
+                                      function(i) {
+                                        lrss <- try(obj_fun(cfs = rep(1, length(parm.paths)),
+                                                            parm.paths = parm.paths,
+                                                            data = data,
+                                                            iparms = as.list(grid[i, ]),
+                                                            weights = weights,
+                                                            index = index,
+                                                            parm.vector.index = parm.vector.index,
+                                                            replacement = replacement,
+                                                            root = root,
+                                                            gpi = i), silent = TRUE)
+                                        if(inherits(lrss, 'try-error')){
+                                          lrss <- -1
+                                        } 
+                                        return(lrss)
+                                      })
+      
+      lrss.vec <- do.call(c, lrss.vec)
+      parallel::stopCluster(cl)
+    }
+
+    ## It looks like I still need to clean up when running parallel
+    if(cores > 1){
+      for(i in seq_len(nrow(grid))){
+        for(j in c("apsimx", "db", "db-wal", "db-shm")){
+          to.delete <- paste0(tools::file_path_sans_ext(file), "-", i, ".", j)
+          file.to.delete <- file.path(src.dir, to.delete)
+          if(file.exists(file.to.delete)) file.remove(file.to.delete)          
+        }
+      }
+    }
+
+    ## Run the model one more time with the best result
+    ans.grid <- cbind(grid, lrss = unlist(lrss.vec))
+    if(verbose){
+      number.parse.fails <- nrow(ans.grid[ans.grid$lrss < 0, ])
+      cat("Number of parse fails:", number.parse.fails, "\n")
+    }
+    if(any(ans.grid$lrss < 0))  ans.grid[ans.grid$lrss < 0, "lrss"] <- NA
+    wminlrss <- which.min(ans.grid$lrss)
+    ### 'Optimized' parameters are the ratio over the original values
+    op.par <- as.vector(unlist(grid[wminlrss,])) / as.vector(unlist(oiparms))
+    best.parms <- grid[wminlrss,]
+    lrss <- obj_fun(cfs = rep(1, length(parm.paths)),
+                    parm.paths = parm.paths,
+                    data = data,
+                    iparms = best.parms,
+                    weights = weights,
+                    index = index,
+                    parm.vector.index = parm.vector.index,
+                    replacement = replacement,
+                    root = root)
+    
+    op <- list(par = op.par, 
+               value = min(ans.grid$lrss),
+               counts = nrow(grid),
+               convergence = NA,
+               message = "grid")
+  }
   
   if(type == "mcmc"){
     ## Setting defaults
@@ -388,161 +556,27 @@ optim_apsimx <- function(file, src.dir = ".",
     return(op.mcmc)
   }
   
-  ans <- structure(list(pre.rss = exp(pre.lrss), 
-                        post.rss = exp(op$value), ## This is weighted RSS
-                        weights = weights,
-                        iaux.parms = iparms, op = op, n = nrow(data),
-                        parm.vector.index = parm.vector.index),
-                   class = "optim_apsim")
+  if(type != "grid"){
+    ans <- structure(list(pre.rss = exp(pre.lrss), 
+                          post.rss = exp(op$value), ## This is weighted RSS
+                          weights = weights,
+                          iaux.parms = iparms, op = op, n = nrow(data),
+                          res = NA,
+                          parm.vector.index = parm.vector.index),
+                     class = "optim_apsim")    
+  }else{
+    ans <- structure(list(pre.rss = exp(pre.lrss), 
+                          post.rss = exp(min(ans.grid$lrss, na.rm = TRUE)), ## This is smallest RSS
+                          weights = weights,
+                          iaux.parms = oiparms, op = op, n = nrow(data),
+                          res = ans.grid,
+                          parm.vector.index = parm.vector.index),
+                     class = "optim_apsim")
+  }
+
   return(ans)
 }
 
-#'
-#' Extract initial values from a parameter path
-#' @title Extract values from a parameter path
-#' @name extract_values_apsimx
-#' @param file file name to be run (the extension .apsimx is optional)
-#' @param src.dir directory containing the .apsimx file to be run (defaults to the current directory)
-#' @param parm.path parameter path either use inspect_apsimx or see example below
-#' @return a vector with extracted parameter values from an APSIM file.
-#' @export
-#' @examples 
-#' \donttest{
-#' ## Find examples
-#' extd.dir <- system.file("extdata", package = "apsimx")
-#' ## Extract parameter path
-#' pp <- inspect_apsimx("Maize.apsimx", src.dir = extd.dir,
-#'                      node = "Manager", parm = list("Fert", 1))
-#' ppa <- paste0(pp, ".Amount")
-#' ## Extract value
-#' extract_values_apsimx("Maize.apsimx", src.dir = extd.dir, parm.path = ppa)
-#' }
-extract_values_apsimx <- function(file, src.dir, parm.path){
-  
-  .check_apsim_name(file)
-  
-  file.names <- dir(path = src.dir, pattern=".apsimx$", ignore.case=TRUE)
-  
-  if(length(file.names) == 0){
-    stop("There are no .apsimx files in the specified directory to inspect.")
-  }
-  
-  file <- match.arg(file, file.names)
-  
-  apsimx_json <- jsonlite::read_json(paste0(src.dir, "/", file))
-  
-  upp <- strsplit(parm.path, ".", fixed = TRUE)[[1]]
-  upp.lngth <- length(upp)
-  if(upp.lngth < 5) stop("Parameter path too short?")
-  if(upp.lngth > 10) stop("Cannot handle this yet")
-  ## upp[2] is typically "Simulations"
-  if(apsimx_json$Name != upp[2])
-    stop("Simulation root name does not match")
-  wl3 <- which(upp[3] == sapply(apsimx_json$Children, function(x) x$Name))
-  ## At this level I select among simulation children
-  ## upp[3] is typically "Simulation"
-  n3 <- apsimx_json$Children[[wl3]]
-  ## Look for the first reasonable parameter
-  wl4 <- which(upp[4] == sapply(n3$Children, function(x) x$Name))
-  ## This is super dumb but I do not know how to do it otherwise
-  ## Length is equal to 5
-  if(upp.lngth == 5){
-    if(upp[5] %in% names(n3$Children[[wl4]])){
-      value <- n3$Children[[wl4]][[upp[5]]]
-    }else{
-      wl5 <- which(upp[5] == sapply(n3$Children[[wl4]]$Children, function(x) x$Name))
-      if(length(wl5) == 0) stop("Parameter not found at level 5")
-      value <- n3$Children[[wl4]]$Children[[wl5]][[upp[5]]]
-    }
-  }
-  ## Length is equal to 6
-  if(upp.lngth == 6){
-    n4 <- apsimx_json$Children[[wl3]]$Children[[wl4]]
-    wl5 <- which(upp[5] == sapply(n4$Children, function(x) x$Name))
-    if(upp[6] %in% names(n4$Children[[wl5]])){
-      value <- n4$Children[[wl5]][[upp[6]]]
-    }else{
-      if("Parameters" %in% names(n4$Children[[wl5]])){
-        wp <- grep(upp[6], n4$Children[[wl5]]$Parameters)
-        if(length(wp) == 0) stop("Could not find parameter")
-        value <- n4$Children[[wl5]]$Parameters[[wp]]$Value
-      }else{
-        wl6 <- which(upp[6] == sapply(n4$Children[[wl5]]$Children, function(x) x$Name))
-        if(length(wl6) == 0) stop("Could not find parameter")
-        value <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]][[upp[6]]]          
-      }
-    }
-  }
-  if(upp.lngth == 7){
-    n4 <- apsimx_json$Children[[wl3]]$Children[[wl4]]
-    wl5 <- which(upp[5] == sapply(n4$Children, function(x) x$Name))
-    n5 <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]
-    wl6 <- which(upp[6] == sapply(n5$Children, function(x) x$Name))
-    value <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]][[upp[7]]]
-    if(is.null(value)){
-      n6 <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]]
-      if("Command" %in% names(n6)){
-        gpv <- grep(upp[7], n6$Command, value = TRUE)
-        value <- as.numeric(strsplit(gpv, "=")[[1]][2])
-      }
-    }
-  }
-  if(upp.lngth == 8){
-    n4 <- apsimx_json$Children[[wl3]]$Children[[wl4]]
-    wl5 <- which(upp[5] == sapply(n4$Children, function(x) x$Name))
-    n5 <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]
-    wl6 <- which(upp[6] == sapply(n5$Children, function(x) x$Name))
-    n6 <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]]
-    wl7 <- which(upp[7] == sapply(n6$Children, function(x) x$Name))
-    value <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]]$Children[[wl7]][[upp[8]]]
-    if(is.null(value)){
-      n7 <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]]$Children[[wl7]]
-      if("Command" %in% names(n7)){
-        gpv <- grep(upp[8], n7$Command, value = TRUE)
-        value <- as.numeric(strsplit(gpv, "=")[[1]][2])
-      }
-    }
-  }
-  if(upp.lngth == 9){
-    n4 <- apsimx_json$Children[[wl3]]$Children[[wl4]]
-    wl5 <- which(upp[5] == sapply(n4$Children, function(x) x$Name))
-    n5 <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]
-    wl6 <- which(upp[6] == sapply(n5$Children, function(x) x$Name))
-    n6 <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]]
-    wl7 <- which(upp[7] == sapply(n6$Children, function(x) x$Name))
-    n7 <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]]$Children[[wl7]]
-    wl8 <- which(upp[8] == sapply(n7$Children, function(x) x$Name))
-    value <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]]$Children[[wl7]]$Children[[wl8]][[upp[9]]] 
-    if(is.null(value)){
-      n8 <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]]$Children[[wl7]]$Children[[wl8]]
-      if("Command" %in% names(n8)){
-        gpv <- grep(upp[9], n8$Command, value = TRUE)
-        value <- as.numeric(strsplit(gpv, "=")[[1]][2])
-      }
-    }
-  }
-  if(upp.lngth == 10){
-    n4 <- apsimx_json$Children[[wl3]]$Children[[wl4]]
-    wl5 <- which(upp[5] == sapply(n4$Children, function(x) x$Name))
-    n5 <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]
-    wl6 <- which(upp[6] == sapply(n5$Children, function(x) x$Name))
-    n6 <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]]
-    wl7 <- which(upp[7] == sapply(n6$Children, function(x) x$Name))
-    n7 <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]]$Children[[wl7]]
-    wl8 <- which(upp[8] == sapply(n7$Children, function(x) x$Name))
-    n8 <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]]$Children[[wl7]]$Children[[wl8]]
-    wl9 <- which(upp[9] == sapply(n8$Children, function(x) x$Name))
-    value <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]]$Children[[wl7]]$Children[[wl8]]$Children[[wl9]][[upp[10]]]
-    if(is.null(value)){
-      n9 <- apsimx_json$Children[[wl3]]$Children[[wl4]]$Children[[wl5]]$Children[[wl6]]$Children[[wl7]]$Children[[wl8]]$Children[[wl9]]
-      if("Command" %in% names(n9)){
-        gpv <- grep(upp[10], n9$Command, value = TRUE)
-        value <- as.numeric(strsplit(gpv, "=")[[1]][2])
-      }
-    }
-  }
-  return(value)
-}
 
 ## Log-likelihood
 log_lik <- function(.cfs){

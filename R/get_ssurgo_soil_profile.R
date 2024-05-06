@@ -27,12 +27,18 @@
 #' require(sp)
 #' require(sf)
 #' require(spData)
+#' require(ggplot2)
 #' ## Soil inforation for a single point
 #' sp <- get_ssurgo_soil_profile(lonlat = c(-93, 42))
 #' ## The initial attempt throws warnings, so better to use 'fix'
 #' sp <- get_ssurgo_soil_profile(lonlat = c(-93, 42), fix = TRUE)
 #' plot(sp[[1]])
 #' plot(sp[[1]], property = "water")
+#' ## Add initial water
+#' iwat <- initialwater_parms(Thickness = sp[[1]]$soil$Thickness,
+#'                            InitialValues = sp[[1]]$soil$DUL * 0.8)
+#' sp[[1]]$initialwater <- iwat
+#' plot(sp[[1]], property = "initialwater")
 #' }
 #' 
 #' 
@@ -110,11 +116,6 @@ get_ssurgo_soil_profile <- function(lonlat, shift = -1,
   }else{
     fSDA <- soilDB::fetchSDA(sql, duplicates = TRUE)
   } 
-  
-  ## Number of soils is the number of rows on fSDA@site
-  if(nsoil < 0 || is.na(nsoil)){
-    nsoil <- nrow(fSDA@site)
-  }
   
   ### Mapunit ### -- this might contain the iacornsr
   if(verbose == FALSE){

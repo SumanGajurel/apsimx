@@ -33,7 +33,7 @@
 #' @param overwrite logical; if \code{TRUE} the old file is overwritten, a new file is written otherwise
 #' @param edit.tag if the file is edited a different tag from the default \sQuote{-edited} can be used.
 #' @param parm.path path to the attribute to edit when node is \sQuote{Other}
-#' @param root supply the node postion in the case of multiple simulations such as factorials.
+#' @param root supply the node position in the case of multiple simulations such as factorials.
 #' @param verbose whether to print information about successful edit
 #' @return (when verbose=TRUE) complete file path to edited .apsimx file is returned as a character string.
 #' As a side effect this function creates a new (JSON) .apsimx file.
@@ -50,12 +50,12 @@
 #' edit_apsimx("Wheat.apsimx", src.dir = extd.dir,
 #'             wrt.dir = tmp.dir,
 #'             node = "Soil",
-#'             soil.child = "Water", 
+#'             soil.child = "Physical", 
 #'             parm = "BD", value = bds,
 #'             verbose = FALSE)
 #' ## Inspect file
 #' inspect_apsimx("Wheat-edited.apsimx", src.dir = tmp.dir,
-#'                 node = "Soil", soil.child = "Water")
+#'                 node = "Soil", soil.child = "Physical")
 #' ## To delete the file...
 #' file.remove(file.path(tmp.dir, "Wheat-edited.apsimx"))
 #' 
@@ -77,7 +77,7 @@
 
 edit_apsimx <- function(file, src.dir = ".", wrt.dir = NULL,
                         node = c("Clock", "Weather", "Soil", "SurfaceOrganicMatter", "MicroClimate", "Crop", "Manager", "Report", "Operations", "Other"),
-                        soil.child = c("Metadata", "Water", "SoilWater", "Organic", "Physical", "Analysis", "Chemical", "InitialWater", "Sample", "Swim3"),
+                        soil.child = c("Metadata", "Water", "SoilWater", "Organic", "Physical", "Analysis", "Chemical", "InitialWater", "Sample", "Solute", "NO3", "NH4", "Urea", "Swim3"),
                         manager.child = NULL,
                         parm = NULL, value = NULL, 
                         overwrite = FALSE,
@@ -86,11 +86,11 @@ edit_apsimx <- function(file, src.dir = ".", wrt.dir = NULL,
                         root = NULL,
                         verbose = TRUE){
   
-  .check_apsim_name(file)
+  if(isFALSE(apsimx.options$allow.path.spaces)) .check_apsim_name(file)
   
   if(missing(wrt.dir)) wrt.dir <- src.dir
   
-  file.names <- dir(path = src.dir, pattern=".apsimx$", ignore.case=TRUE)
+  file.names <- dir(path = src.dir, pattern = ".apsimx$", ignore.case = TRUE)
   
   if(length(file.names) == 0){
     stop("There are no .apsimx files in the specified directory to edit.")
@@ -317,7 +317,7 @@ edit_apsimx <- function(file, src.dir = ".", wrt.dir = NULL,
       }
     }
   
-    if(soil.child == "Water" || soil.child == "Physical"){
+    if(soil.child == "Physical"){
       edited.child <- soil.child
       
       ## In older versions of APSIM Next Gen instead of 'Physical' it was called
@@ -410,33 +410,91 @@ edit_apsimx <- function(file, src.dir = ".", wrt.dir = NULL,
       soil.node[[1]]$Children[wsomn][[1]] <- soil.om.node
     }
     
-    if(soil.child == "Analysis" || soil.child == "Chemical"){
+    if(soil.child %in% c("Analysis", "Chemical", "Solute", "NO3", "NH4", "Urea")){
       edited.child <- soil.child
       wan <- grepl(soil.child, soil.node0)
-      soil.analysis.node <- soil.node0[wan][[1]]
-      
-      ## Only PH can be edited
-      if(parm != "PH") stop("only PH can be edited, use 'edit_apsimx_replace_soil_profile instead")
-      if(parm == "PH"){
-        for(i in 1:length(soil.analysis.node[[parm]])){
-          soil.analysis.node[[parm]][[i]] <- value[i]
+
+      if(sum(wan) == 1){
+        soil.analysis.node <- soil.node0[wan][[1]]  
+      }else{
+        soil.node0.names <- sapply(soil.node0[wan], FUN = function(x) x$Name)
+        if(soil.child == "Solute"){
+          if(length(parm) != 2)
+            stop("When 'soil.child' is 'Solute' 'parm' should be of length = 2", call. = FALSE)
+          if(!parm[[1]] %in% c("NO3", "NH4", "Urea"))
+            stop("The first element of 'parm' should be one of :", soil.node0.names, call. = FALSE)
+          wsan <- which(soil.node0.names == parm[[1]])
+          soil.analysis.node <- soil.node0[wan][[wsan]]
         }
       }
-      soil.node[[1]]$Children[wan][[1]] <- soil.analysis.node
+      
+      ## Check for length
+      if(length(parm) == 1){
+        if(length(soil.analysis.node[[parm]]) != length(value)){
+          cat("Length of value:", length(value), "\n")
+          cat("Length of 'node':", length(soil.analysis.node[[parm]]), "\n")
+          stop("Length of 'value' should equalto length of 'node'", call. = FALSE)
+        }
+        if(parm %in% c("PH", "NO3", "NH4", "Urea", "Thickness", "InitialValues")){
+          for(i in 1:length(soil.analysis.node[[parm]])){
+            soil.analysis.node[[parm]][[i]] <- value[i]
+          }
+        }else{
+          stop("'parm' should be one of 'PH', 'NO3', 'NH4', 'Urea', 'InitialValues' or 'Thickness'", call. = FALSE)
+        }
+      }
+      
+      if(length(parm) == 2){
+        if(length(soil.analysis.node[[parm[[2]]]]) > length(value))
+          stop("Length of 'value' should not be less than length of 'node'", call. = FALSE)
+        if(length(soil.analysis.node[[parm[[2]]]]) < length(value))
+          stop("Length of 'value' should not be greater than length of 'node'", call. = FALSE)
+        if(!parm[[2]] %in% names(soil.analysis.node))
+          stop("The second element of 'parm' should be one of: ", names(soil.analysis.node), call. = FALSE)
+        for(i in 1:length(soil.analysis.node[[parm[[2]]]])){
+          soil.analysis.node[[parm[[2]]]][[i]] <- value[i]
+        }
+      }
+      ### Need to fix this
+      if(sum(wan) == 1){
+        soil.node[[1]]$Children[wan][[1]] <- soil.analysis.node  
+      }else{
+        soil.node[[1]]$Children[wan][[wsan]] <- soil.analysis.node
+      }
     }
     
-    if(soil.child == "InitialWater"){
+    if(soil.child == "InitialWater" || soil.child == "Water"){
       edited.child <- "InitialWater"
-      wiwn <- grepl("InitialWater", soil.node0)
+      soil.node0.names <- sapply(soil.node0, function(x) x$Name)
+      wiwn <- grep("InitialWater", soil.node0.names)
+      if(length(wiwn) == 0){
+        ### Maybe find just water?
+        wiwn <- grep("^Water", soil.node0.names)
+        if(length(wiwn) == 0){
+          wiwn <- grep("initial water", soil.node0.names, ignore.case = TRUE)
+        }
+      }
+      if(length(wiwn) == 0)
+        stop("InitialWater node not found", call. = FALSE)
+      
       soil.initialwater.node <- soil.node0[wiwn][[1]]
       
       ## Only three can be edited: PercentMethod, FractionFull, DepthWetSoil
-      siw.parms <- c("PercentMethod", "FractionFull", "DepthWetSoil")
+      siw.parms <- c("PercentMethod", "FractionFull", "DepthWetSoil", "Thickness", "InitialValues")
       parm <- match.arg(parm, choices = siw.parms)
       
-      soil.initialwater.node[[parm]] <- value
-      
-      soil.node[[1]]$Children[wiwn][[1]] <- soil.initialwater.node
+      if(parm %in% c("Thickness", "InitialValues")){
+        soil.initialwater.node.vector <- soil.initialwater.node[[parm]]
+        if(length(value) != length(soil.initialwater.node.vector))
+          stop("Length of 'value' should match the length of ", parm, call. = FALSE)
+        for(i in seq_along(soil.initialwater.node.vector))
+          soil.initialwater.node.vector[[1]][[i]] <- value[i]
+        soil.initialwater.node[[parm]] <- soil.initialwater.node.vector[[1]]
+        soil.node[[1]]$Children[wiwn][[1]] <- soil.initialwater.node
+      }else{
+        soil.initialwater.node[[parm]] <- value
+        soil.node[[1]]$Children[wiwn][[1]] <- soil.initialwater.node        
+      }
     }
     
     if(soil.child == "Sample"){

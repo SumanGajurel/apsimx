@@ -6,6 +6,9 @@
 ## 3. plotting and different combinations
 
 require(apsimx)
+packageVersion("apsimx")
+packageVersion("GSODR")
+packageVersion("data.table")
 
 run.apsim.met <- get(".run.local.tests", envir = apsimx.options)
 
@@ -14,7 +17,7 @@ if(.Platform$OS.type == "unix"){
 }else{
   internet <- FALSE  
 }
-  
+run.apsim.met <- FALSE  ## This does not work because GSODR does not work
 if(run.apsim.met && internet){
   
   ## Testing napad and impute
@@ -23,8 +26,10 @@ if(run.apsim.met && internet){
   bsas.lon <- unit_conv("58d 22' 54\" S", from = "degrees", to = "decimal")
   
   pwr <- get_power_apsim_met(lonlat = c(bsas.lon, bsas.lat), dates = c("2010-01-01", "2015-12-31"))
+  dim(pwr)
   check_apsim_met(pwr)
   gsd <- get_gsod_apsim_met(lonlat = c(bsas.lon, bsas.lat), dates = c("2010-01-01", "2015-12-31"))
+  dim(gsd)
   check_apsim_met(gsd)
   gsd$radn <- pwr$radn
   check_apsim_met(gsd)
@@ -130,8 +135,6 @@ if(run.apsim.met && internet){
   plot(pwr, summary = TRUE, climatology = TRUE)
   plot(pwr, summary = TRUE, met.var = "rain", climatology = TRUE)
   
-  
-  
   ## Plotting using the density option ----
   plot(pwr, plot.type = "density")
   plot(pwr, plot.type = "density", met.var = "radn")
@@ -176,6 +179,7 @@ if(run.apsim.met && internet){
   apwr4 <- summary(pwr, anomaly = "maxt")
   apwr5 <- summary(pwr, anomaly = c("maxt", "rain"))
   
+  plot(pwr, plot.type = "anomaly")
   plot(pwr, plot.type = "anomaly", summary = TRUE, met.var = "rain")
   plot(pwr, plot.type = "anomaly", summary = TRUE, years = 2012:2015)
   
@@ -183,4 +187,16 @@ if(run.apsim.met && internet){
   plot(pwr, plot.type = "anomaly", summary = TRUE, years = 2012:2015, met.var = c("avg_maxt", "rain_sum"))
   plot(pwr, plot.type = "anomaly", summary = TRUE, years = 2012:2015, met.var = c("rain_sum", "avg_maxt"))
   
+  pwr <- tt_apsim_met(pwr, dates = c("01-05", "30-10"), method = "Classic_TT")
+  
+  summary(pwr)
+  summary(pwr, compute.frost = TRUE)
+  
+  plot(pwr, met.var = "Classic_TT")
+  plot(pwr, met.var = "Classic_TT", plot.type = "density")
+  plot(pwr, met.var = "Classic_TT", plot.type = "anomaly", years = 2012:2019)
+  
+  plot(pwr, plot.type = "anomaly", summary = TRUE, met.var = c("rain", "high_classic_tt"))
+  plot(pwr, plot.type = "anomaly", summary = TRUE, met.var = c("rain", "high_classic_tt"),
+       years = 2012:2016)
 }

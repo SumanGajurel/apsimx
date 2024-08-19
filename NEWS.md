@@ -1,6 +1,23 @@
 **NEWS**
 
-## apsimx 2.7.X
+## apsimx 2.8.0 - 2024-08-19
+
+- Many changes to inspect, extract and edit to better support 'InitialWater' and 'Solutes'. There is significant testing, but more is needed.
+
+- New function 'check_apsimx' that will try to identify common issues in apsimx files
+
+- apsimx_example can now run several other examples
+
+- There is an option to run files which are in directories with spaces. This is experimental as it can fail in some cases. See 'apsimx_options'.
+
+- Improvements to the code that runs 'sens_apsimx' in parallel
+
+- Implemented 'id' and 'id.labels' in plot for compare_apsim
+
+- Package 'FedData' was removed from 'Suggests' as it was removed from CRAN (8-19-2024).
+It has not been used in the 'apsimx' package for a long time.
+
+## apsimx 2.7.7
 
 - sens_apsimx can now accept an argument called 'soil.profiles'. This opens the door
 for conducting simulations on a spatial grid, by carefully passing weather and soils profiles.

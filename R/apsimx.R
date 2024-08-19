@@ -34,11 +34,13 @@ apsimx <- function(file = "", src.dir = ".",
   
   if(file == "") stop("need to specify file name")
   
-  .check_apsim_name(file)
-  .check_apsim_name(normalizePath(src.dir))
+  if(isFALSE(apsimx::apsimx.options$allow.path.spaces)){
+     .check_apsim_name(file)
+     .check_apsim_name(normalizePath(src.dir))
+  }
   
   ## The might offer suggestions in case there is a typo in 'file'
-  file.names <- dir(path = src.dir, pattern=".apsimx$", ignore.case=TRUE)
+  file.names <- dir(path = src.dir, pattern=".apsimx$", ignore.case = TRUE)
   
   if(length(file.names) == 0){
     stop("There are no .apsimx files in the specified directory to run.")
@@ -74,17 +76,30 @@ apsimx <- function(file = "", src.dir = ".",
     }
     ## Run APSIM-X on the command line
     if(!missing(xargs)) run.strng <- paste(run.strng, xargs$xargs.string)
-    res <- system(command = run.strng, ignore.stdout = silent, intern = TRUE)
+    
+    if(apsimx::apsimx.options$allow.path.spaces){
+      ## As written here, this will not work with dotnet or mono
+      ## Just so I do not forget. The problem with spaces can be
+      ## overcome for file paths but I do not think it can be 
+      ## solved for the program command name
+      run.strng <- paste0(ada, 
+                          " ", 
+                          shQuote(normalizePath(file.name.path)))
+    }
+    
+    res <- system(command = run.strng, ignore.stdout = silent, intern = FALSE)
   }
   
   if(.Platform$OS.type == "windows"){
-    ## Should probably delete the line below
-    ## As of 2020-07-04, this seems to be working fine
-    ## I will leave the line below until I'm sure it is not needed
-    ## if(src.dir != ".") stop("In Windows you can only run a file from the current directory.")
-    run.strng <- paste0(ada, " ", file.name.path)
+    if(isFALSE(apsimx::apsimx.options$allow.path.spaces)){
+      run.strng <- paste0(ada, " ", file.name.path)
+    }else{
+      run.strng <- paste0(ada, 
+                          " ", 
+                          shQuote(normalizePath(file.name.path)))
+    }
     if(!missing(xargs)) run.strng <- paste(run.strng, xargs$xargs.string)
-    shell(cmd = run.strng, translate = TRUE, intern = TRUE)
+    shell(cmd = run.strng, translate = TRUE, intern = FALSE)
   }
 
   if(value != "none"){
@@ -202,8 +217,16 @@ auto_detect_apsimx <- function(){
         newest.version <- grep(newest.version.number, laf[find.apsim], value = TRUE)
         if(apsimx::apsimx.options$warn.versions &&
            is.na(apsimx::apsimx.options$exe.path)){
-           warning(paste("Multiple versions of APSIM-X installed. \n
-                    Choosing the newest one:", newest.version))
+          options.warn.versions <- getOption("apsimx.warn.versions")
+          if(is.null(options.warn.versions)){
+            warning(paste("Multiple versions of APSIM-X installed. \n
+                    Choosing the newest one:", newest.version))            
+          }else{
+            if(isTRUE(options.warn.versions)){
+              warning(paste("Multiple versions of APSIM-X installed. \n
+                    Choosing the newest one:", newest.version))            
+            }
+          }
         }
         apsimx.name <- newest.version
         apsimx_dir <- paste0(st1, apsimx.name, st3)
@@ -243,8 +266,16 @@ auto_detect_apsimx <- function(){
         len.fa <- length(find.apsim)
         newest.version <- apsimx.versions[find.apsim]
         if(apsimx::apsimx.options$warn.versions){
-          warning(paste("Multiple versions of APSIM-X installed. \n
-                    Choosing the newest one:", newest.version))
+          options.warn.versions <- getOption("apsimx.warn.versions")
+          if(is.null(options.warn.versions)){
+            warning(paste("Multiple versions of APSIM-X installed. \n
+                    Choosing the newest one:", newest.version))            
+          }else{
+            if(isTRUE(options.warn.versions)){
+              warning(paste("Multiple versions of APSIM-X installed. \n
+                    Choosing the newest one:", newest.version))            
+            }
+          }
         }
         apsimx.name <- newest.version
         apsimx_dir <- paste0(st1, apsimx.name, st3)
@@ -286,8 +317,16 @@ auto_detect_apsimx <- function(){
       apsimx.versions <- laf[find.apsim]
       newest.version <- apsimx.versions[length(find.apsim)]
       if(apsimx::apsimx.options$warn.versions){
-        warning(paste("Multiple versions of APSIM-X installed. \n
-                    Choosing the newest one:", newest.version))
+        options.warn.versions <- getOption("apsimx.warn.versions")
+        if(is.null(options.warn.versions)){
+          warning(paste("Multiple versions of APSIM-X installed. \n
+                    Choosing the newest one:", newest.version))            
+        }else{
+          if(isTRUE(options.warn.versions)){
+            warning(paste("Multiple versions of APSIM-X installed. \n
+                    Choosing the newest one:", newest.version))            
+          }
+        }
       }
       apsimx.name <- newest.version
       apsimx_dir <- paste0(st1, apsimx.name, st3)
@@ -419,9 +458,14 @@ apsimx_example <- function(example = "Wheat", silent = FALSE){
   ## Several examples are not supported because they do not use
   ## relative paths for the weather file
   ## Examples which do not run: Chicory
-  ex.ch <- c("Barley", "ControlledEnvironment", "Eucalyptus",
-             "EucalyptusRotation",
-             "Maize", "Oats", "Rotation", "Soybean", "Sugarcane", "Wheat")
+  ex.ch <- c("AgPasture", "Barley", "Canola", "Chickpea", 
+               "ControlledEnvironment", "Eucalyptus",
+               "EucalyptusRotation",
+               "Maize", "Mungbean",
+               "Oats", "OilPalm", "Peanut", "Pinus", "Potato",
+               "RedClover",
+               "Rotation", "Slurp", "Sorghum",
+               "Soybean", "Sugarcane", "Wheat", "WhiteClover")
 
   example <- match.arg(example, choices = ex.ch)
   
@@ -649,6 +693,340 @@ read_apsimx_all <- function(src.dir = ".", value = "report"){
   return(ans)
 }
 
+#### check_apsimx ----
+
+#' @title Partial checking of an apsimx file for possible issues.
+#' @name check_apsimx
+#' @param file file ending in .apsimx to be edited (JSON)
+#' @param src.dir directory containing the .apsimx file to be checked; defaults to the current working directory
+#' @param node either \sQuote{all}, \sQuote{Clock}, \sQuote{Weather}, \sQuote{Soil}
+#' @param soil.child specific soil component to be checked.
+#' @param check.apsim.met whether to check the \sQuote{met} file. Default is FALSE.
+#' @param root supply the node position in the case of multiple simulations such as factorials.
+#' @param verbose whether to print information
+#' @return It does not return an object, but it prints messages useful for diagnosing issues.
+#' @export
+#' @examples
+#' \donttest{
+#' 
+#' ## Check file distributed with the package
+#' extd.dir <- system.file("extdata", package = "apsimx")
+#' 
+#' check_apsimx("Wheat.apsimx", src.dir = extd.dir)
+#' ## This throws warnings but it should not produce errors
+#' }
+
+check_apsimx <- function(file = "", src.dir = ".",
+                         node = c("all", "Clock", "Weather", "Soil"),
+                         soil.child = c("all", "Physical", "InitialWater", "SoilWater", "Solute", "Organic"),
+                         check.apsim.met = FALSE,
+                         root = NULL,
+                         verbose = TRUE){
+  
+  if(file == "") stop("need to specify file name")
+  
+  if(isFALSE(apsimx::apsimx.options$allow.path.spaces)){
+    .check_apsim_name(file)
+    .check_apsim_name(normalizePath(src.dir))
+  }
+  
+  ## The might offer suggestions in case there is a typo in 'file'
+  file.names <- dir(path = src.dir, pattern = ".apsimx$", ignore.case = TRUE)
+  
+  if(length(file.names) == 0){
+    stop("There are no .apsimx files in the specified directory to run.")
+  }
+  
+  file <- match.arg(file, file.names)
+
+  node <- match.arg(node)
+  soil.child <- match.arg(soil.child)
+  
+  ### Checking the Clock
+  if(node %in% c("all", "Clock")){
+    if(verbose) cat("Checking the Clock \n")
+    dates <- try(extract_data_apsimx(file = file, src.dir = src.dir,
+                                 node = "Clock", root = root), silent = TRUE)
+    if(inherits(dates, 'try-error') || nrow(dates) == 0){
+      warning("Clock not found", immediate. = TRUE)
+    }else{
+      try.start <- try(as.Date(dates[[1]], tryFormats = c("%Y-%m-%dT%H:%M:%S")), silent = TRUE)
+      if(inherits(try.start, "try-error"))
+        warning(names(dates)[1], " : ", try.start, immediate. = TRUE)
+      try.end <- try(as.Date(dates[[2]], tryFormats = c("%Y-%m-%dT%H:%M:%S")), silent = TRUE)
+      if(inherits(try.end, "try-error"))
+        warning(names(dates)[2], " : ", try.end, immediate. = TRUE)      
+    }
+  }
+  
+  ### Checking the Weather
+  if(node %in% c("all", "Weather")){
+    if(verbose) cat("Checking the Weather (met) \n")
+    met.name <- try(extract_data_apsimx(file = file, src.dir = src.dir,
+                                    node = "Weather",
+                                    root = root), silent = TRUE)
+    if(inherits(met.name, 'try-error')){
+      message("Weather (met) file path: ", met.name)
+      warning("Weather (met) not found", immediate. = TRUE)  
+    }else{
+      if(grepl("%root%", met.name)){
+        ## This means that the weather file is from an example 
+        ex.dir <- auto_detect_apsimx_examples()
+        mfn0 <- strsplit(met.name[[1]], "[\\/]", fixed = FALSE)[[1]]
+        mfn0.length <- length(mfn0)
+        mfn <- mfn0[mfn0.length]
+        mwf <- mfn0[mfn0.length - 1]
+        mfe <- file.exists(file.path(ex.dir, mwf, mfn))
+      }else{
+        mfe <- file.exists(met.name[[1]])
+      }
+      if(!mfe){
+        message("Weather (met) file path: ", met.name)
+        warning("Could not find 'met' file", immediate. = TRUE)
+      }else{
+        if(check.apsim.met){
+          ### Annoying, but I need to split the name
+          mfn <- basename(normalizePath(met.name[[1]])) ## met file name
+          mfsd <- dirname(normalizePath(met.name[[1]]))
+          met <- read_apsim_met(file = mfn, src.dir = mfsd)
+          check_apsim_met(met)
+        }
+      }
+    }
+  }
+
+  if(node %in% c("all", "Soil")){
+    
+    if(soil.child %in% c("all", "Physical")){
+      
+      if(verbose) cat("Checking the soil physical properties \n")
+      ### First: extract soil physical
+      soil.physical <- extract_data_apsimx(file = file, src.dir = src.dir, 
+                                           node = "Soil", 
+                                           soil.child = "Physical",
+                                           root = root)
+      ### Check the layers
+      soil.physical.layers <- soil.physical[[1]]
+      if(verbose) cat("Soil has: ", nrow(soil.physical.layers), "layers \n")
+      
+      for(i in seq_len(nrow(soil.physical.layers))){
+        if(verbose) cat("Checking Physical layer:", i, "\n")
+        ### Checking Thickness
+        thickness.value <- as.numeric(soil.physical.layers[["Thickness"]][i])
+        if(thickness.value <= 0)
+          message("Thickness for layer: ", i, " is less than or equal to zero. Value: ", thickness.value)
+        ### Checking Bulk Density
+        bd.value <- as.numeric(soil.physical.layers[["BD"]][i])
+        if(bd.value <= 0)
+          message("Bulk Density for layer: ", i, " is less than or equal to zero. Value: ", bd.value)
+        if(bd.value > 3)
+          message("Bulk Density for layer: ", i, " is greater than 3. Value: ", bd.value)
+        ### Checking AirDry
+        AirDry.value <- as.numeric(soil.physical.layers[["AirDry"]][i])
+        if(AirDry.value <= 0)
+          message("AirDry for layer: ", i, " is less than or equal to zero. Value: ", AirDry.value)
+        if(AirDry.value > 1)
+          message("AirDry for layer: ", i, " is greater than 1. Value: ", AirDry.value)
+        ### Checking LL15
+        LL15.value <- as.numeric(soil.physical.layers[["LL15"]][i])
+        if(LL15.value <= 0)
+          message("LL15 for layer: ", i, " is less than or equal to zero. Value: ", LL15.value)
+        if(LL15.value > 1)
+          message("LL15 for layer: ", i, " is greater than 1. Value: ", LL15.value)
+        if(AirDry.value > LL15.value) ## AirDry value should be lower than the LL15 value, always right?
+          message("The AirDry value is greater than the LL15 value for layer: ", i, ". AirDry value: ", AirDry.value, ". LL15 value:", LL15.value)
+        ### Checking DUL
+        DUL.value <- as.numeric(soil.physical.layers[["DUL"]][i])
+        if(DUL.value <= 0)
+          message("DUL for layer: ", i, " is less than or equal to zero. Value: ", DUL.value)
+        if(DUL.value > 1)
+          message("DUL for layer: ", i, " is greater than 1. Value: ", DUL.value)
+        if(DUL.value < LL15.value) ## DUL value should be greater than the LL15 value, always right?
+          message("The DUL value is lower than the LL15 value for layer: ", i, ". DUL value: ", DUL.value, ". LL15 value:", LL15.value)
+        ### Checking SAT
+        SAT.value <- as.numeric(soil.physical.layers[["SAT"]][i])
+        if(SAT.value <= 0)
+          message("SAT for layer: ", i, " is less than or equal to zero. Value: ", SAT.value)
+        if(SAT.value > 1)
+          message("SAT for layer: ", i, " is greater than 1. Value: ", SAT.value)
+        if(SAT.value < DUL.value) ## SAT value should be greater than the DUL value, always right?
+          message("The SAT value is lower than the DUL value for layer: ", i, ". SAT value: ", SAT.value, ". DUL value:", DUL.value)
+      }
+    }
+    
+    if(soil.child %in% c("all", "InitialWater")){
+
+      if(verbose) cat("Checking the soil initial water \n")
+      ### First: extract soil InitialWater
+      soil.initialwater <- extract_data_apsimx(file = file, src.dir = src.dir, 
+                                               node = "Soil", 
+                                               soil.child = "InitialWater",
+                                               root = root)
+      soil.initialwater.initialvalues <- soil.initialwater$second
+      if(is.null(soil.initialwater.initialvalues)){
+        warning("'soil.initialwater.initialvalues' is null", immediate. = TRUE)
+      }else{
+        ## Check number of layers
+        if(soil.child %in% "all"){
+          ## Are the number of layers the same as for 'Physical'?
+          soil.physical.layers.length <- nrow(soil.physical.layers)
+          soil.initialwater.initialvalues.length <- nrow(soil.initialwater.initialvalues)
+          if(soil.physical.layers.length != soil.initialwater.initialvalues.length){
+            cat("Number of layers in soil physical:", soil.physical.layers.length, "\n")
+            cat("Number of layers in initial water values:", soil.initialwater.initialvalues.length, "\n")
+            message("Number of layers in physical does match the ones in InitialWater - InitialValues")
+          }
+          ## Checking that InitialWater is between LL15 and SAT (It can be greater than DUL?)
+          if(soil.physical.layers.length == soil.initialwater.initialvalues.length){
+            for(i in seq_len(soil.initialwater.initialvalues.length)){
+              soil.initialwater.layer.thickness <- soil.initialwater.initialvalues$Thickness[i]
+              soil.physical.layer.thickness <- soil.physical.layers$Thickness[i]
+              if(soil.physical.layer.thickness != soil.initialwater.layer.thickness){
+                cat("Soil physical Thickness for layer:", i, " is ", soil.physical.layer.thickness, "\n")
+                cat("Soil InitialWater Thickness:", soil.initialwater.layer.thickness, "\n")
+                message("Soil Physical Thickness does not match InitialWater")
+              }
+              soil.initialwater.layer.values <- soil.initialwater.initialvalues$InitialValues[i]
+              soil.physical.layers.LL15 <- soil.physical.layers$LL15[i]
+              soil.physical.layers.SAT <- soil.physical.layers$SAT[i]
+              if(soil.initialwater.layer.values < soil.physical.layers.LL15){
+                message("Soil InitialWater InitialValues for layer ", i, " is lower than LL15")
+              }
+              if(soil.initialwater.layer.values > soil.physical.layers.SAT){
+                message("Soil InitialWater InitialValues for layer ", i, " is greater than SAT")
+              }
+            }
+          }
+        }        
+      }
+    }
+    
+    ### Checking SoilWater
+    if(soil.child %in% c("all", "SoilWater")){
+      
+      if(verbose) cat("Checking the soil water \n")
+      ### First: extract soil InitialWater
+      soil.soilwater <- extract_data_apsimx(file = file, src.dir = src.dir, 
+                                               node = "Soil", 
+                                               soil.child = "SoilWater",
+                                               root = root)
+      soil.soilwater.second <- soil.soilwater$second
+      if(is.null(soil.soilwater.second))
+        warning("'soil.soilwater.second' is null", immediate. = TRUE)
+      ## Check number of layers
+      if(soil.child %in% "all"){
+        ## Are the number of layers the same as for 'Physical'?
+        soil.soilwater.second.length <- nrow(soil.soilwater.second)
+        for(i in seq_len(soil.soilwater.second.length)){
+          ### Checking that Thickness is grater than zero
+          if(verbose) cat("Checking SoilWater layer:", i, "\n")
+          if(soil.soilwater.second$Thickness[i] < 0)
+            message("SoilWater Thickness for layer: ", i, " is less than zero")
+          if(soil.soilwater.second$SWCON[i] < 0)
+            message("SoilWater SWCON for layer: ", i, " is less than zero")
+          if(soil.soilwater.second$SWCON[i] > 1)
+            message("SoilWater SWCON for layer: ", i, " is greater than one")
+        }
+      }
+    }
+    
+    if(soil.child %in% c("all", "Solute")){
+      if(verbose) cat("Checking the soil Solutes \n")
+      ### First: extract soil Solutes
+      soil.solutes <- try(extract_data_apsimx(file = file, src.dir = src.dir, 
+                                               node = "Soil", 
+                                               soil.child = "Solute",
+                                               root = root), silent = TRUE)
+      if(inherits(soil.solutes, 'try-error')){
+        warning("Soil 'Solutes' not found", immediate. = TRUE)
+      }else{
+        if(verbose) cat("Solutes: ", names(soil.solutes), "\n")
+        for(i in seq_along(soil.solutes)){
+          soil.solute.initialvalues <- soil.solutes[[i]][[1]]
+          soil.solute.initialvalues.length <- nrow(soil.solute.initialvalues)
+          if(soil.physical.layers.length != soil.solute.initialvalues.length){
+            cat("Number of layers in soil physical:", soil.physical.layers.length, "\n")
+            cat("Number of layers in solute values:", soil.solute.initialvalues.length, "\n")
+            message("Number of layers in physical does match the ones in Solute - InitialValues")
+          }
+          for(j in seq_len(soil.solute.initialvalues.length)){
+            soil.solute.layer.thickness <- soil.solute.initialvalues$Thickness[i]
+            soil.physical.layer.thickness <- soil.physical.layers$Thickness[i]
+            if(soil.physical.layer.thickness != soil.solute.layer.thickness){
+              cat("Soil physical Thickness for layer:", i, " is ", soil.physical.layer.thickness, "\n")
+              cat("Soil solute Thickness:", soil.solute.layer.thickness, "\n")
+              message("Soil Physical Thickness does not match Solute")
+            }
+            soil.solute.layer.values <- soil.solute.initialvalues$InitialValues[i]
+            if(!is.numeric(soil.solute.layer.values)){
+              warning("Soil Solute InitialValues for layer ", i, " is not numeric", immediate. = TRUE)
+            }
+            if(soil.solute.layer.values < 0){
+              warning("Soil Solute InitialValues for layer ", i, " is less than zero", immediate. = TRUE)
+            }
+          }
+        }        
+      }
+    }
+    
+    if(soil.child %in% c("all", "Organic")){
+      if(verbose) cat("Checking the soil Organic \n")
+      ### First: extract soil Organic
+      soil.organic <- extract_data_apsimx(file = file, src.dir = src.dir, 
+                                          node = "Soil", 
+                                          soil.child = "Organic",
+                                          root = root)   
+      
+      soil.organic.layers <- soil.organic[[2]]
+      ### Only checking the second component for now
+      if(verbose) cat("Soil Organic has: ", nrow(soil.organic.layers), "layers \n")
+      
+      for(i in seq_len(nrow(soil.organic.layers))){
+        if(verbose) cat("Checking Organic layer:", i, "\n")
+        thickness.value <- as.numeric(soil.organic.layers[["Thickness"]][i])
+        if(thickness.value <= 0)
+          message("Thickness for layer: ", i, " is less than or equal to zero. Value: ", thickness.value)         
+        ### Checking Carbon
+        carbon.value <- as.numeric(soil.organic.layers[["Carbon"]][i])
+        if(carbon.value <= 0)
+          message("Carbon for layer: ", i, " is less than or equal to zero. Value: ", carbon.value)
+        if(carbon.value > 100)
+          message("Carbon for layer: ", i, " is greater than 100. Value: ", carbon.value)
+        ### Checking SoilCNRatio
+        soilcnratio.value <- as.numeric(soil.organic.layers[["SoilCNRatio"]][i])
+        if(soilcnratio.value <= 0)
+          message("SoilCNRatio for layer: ", i, " is less than or equal to zero. Value: ", soilcnratio.value)
+        if(soilcnratio.value > 100)
+          message("SoilCNRatio for layer: ", i, " is greater than 100. Value: ", soilcnratio.value)
+        ### Checking FBiom
+        FBiom.value <- as.numeric(soil.organic.layers[["FBiom"]][i])
+        if(FBiom.value <= 0)
+          message("FBiom for layer: ", i, " is less than or equal to zero. Value: ", FBiom.value)
+        if(FBiom.value > 1)
+          message("FBiom for layer: ", i, " is greater than 1. Value: ", FBiom.value)
+        ### Checking FInert
+        FInert.value <- as.numeric(soil.organic.layers[["FInert"]][i])
+        if(FInert.value <= 0)
+          message("FInert for layer: ", i, " is less than or equal to zero. Value: ", FInert.value)
+        if(FInert.value > 1)
+          message("FInert for layer: ", i, " is greater than 1. Value: ", FInert.value)
+        ### Checking that FBiom + FInert are not greater than 1
+        if(FBiom.value + FInert.value > 1){
+          message("FBiom + FInert for layer: ", i, " is greater than 1. FBiom Value: ", FBiom.value, " FInert Value: ", FInert.value)
+        }
+        ### Checking FOM
+        FOM.value <- as.numeric(soil.organic.layers[["FOM"]][i])
+        if(FOM.value < 0)
+          message("FOM for layer: ", i, " is less than zero. Value: ", FOM.value)
+        if(FOM.value > 1e5)
+          message("FOM for layer: ", i, " is greater than 100,000. Value: ", FOM.value)
+          
+      }
+    }
+  }
+}
+
+
 #' Set apsimx options
 #' 
 #' @title Setting some options for the package
@@ -662,6 +1040,7 @@ read_apsimx_all <- function(src.dir = ".", value = "report"){
 #' @param warn.versions logical. warning if multiple versions of APSIM-X are detected.
 #' @param warn.find.apsimx logical. By default a warning will be thrown if APSIM-X is not found. 
 #' If \sQuote{exe.path} is \sQuote{NA} an error will be thrown instead.
+#' @param allow.path.spaces logical. By default spaces are not allowed in paths or in the run command.
 #' @note It is possible that APSIM-X is installed in some alternative location other than the 
 #'       defaults ones. Guessing this can be difficult and then the auto_detect functions might
 #'       fail. Also, if multiple versions of APSIM-X are installed apsimx will choose the newest
@@ -676,7 +1055,7 @@ read_apsimx_all <- function(src.dir = ".", value = "report"){
 #' }
 
 apsimx_options <- function(exe.path = NA, dotnet = FALSE, mono = FALSE, examples.path = NA, 
-                           warn.versions = TRUE, warn.find.apsimx = TRUE){
+                           warn.versions = TRUE, warn.find.apsimx = TRUE, allow.path.spaces = FALSE){
   
   if(dotnet && mono)
     stop("either dotnet or mono should be TRUE, but not both", call. = TRUE)
@@ -687,6 +1066,7 @@ apsimx_options <- function(exe.path = NA, dotnet = FALSE, mono = FALSE, examples
   assign('examples.path', examples.path, apsimx.options)
   assign('warn.versions', warn.versions, apsimx.options)
   assign('warn.find.apsimx', warn.find.apsimx, apsimx.options)
+  assign('allow.path.spaces', allow.path.spaces, apsimx.options)
 }
 
 #' Environment which stores APSIM-X options
@@ -714,6 +1094,7 @@ assign('mono', FALSE, apsimx.options)
 assign('examples.path', NA, apsimx.options)
 assign('warn.versions', TRUE, apsimx.options)
 assign('warn.find.apsimx', TRUE, apsimx.options)
+assign('allow.path.spaces', FALSE, apsimx.options)
 assign('.run.local.tests', FALSE, apsimx.options)
 
 ## I'm planning to use '.run.local.tests' for running tests
@@ -723,7 +1104,7 @@ assign('.run.local.tests', FALSE, apsimx.options)
 #' @import DBI jsonlite knitr RSQLite xml2 
 #' @importFrom utils read.table write.table packageVersion
 #' @importFrom tools file_path_sans_ext file_ext
-#' @importFrom stats aggregate anova coef cor cov2cor deviance lm optim qt quantile var sd setNames sigma 
+#' @importFrom stats aggregate anova coef cor cov2cor deviance lm optim pnorm qt quantile var sd setNames sigma terms reformulate
 NULL
 
 utils::globalVariables(".data")

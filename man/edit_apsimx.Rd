@@ -11,7 +11,7 @@ edit_apsimx(
   node = c("Clock", "Weather", "Soil", "SurfaceOrganicMatter", "MicroClimate", "Crop",
     "Manager", "Report", "Operations", "Other"),
   soil.child = c("Metadata", "Water", "SoilWater", "Organic", "Physical", "Analysis",
-    "Chemical", "InitialWater", "Sample", "Swim3"),
+    "Chemical", "InitialWater", "Sample", "Solute", "NO3", "NH4", "Urea", "Swim3"),
   manager.child = NULL,
   parm = NULL,
   value = NULL,
@@ -46,7 +46,7 @@ edit_apsimx(
 
 \item{parm.path}{path to the attribute to edit when node is \sQuote{Other}}
 
-\item{root}{supply the node postion in the case of multiple simulations such as factorials.}
+\item{root}{supply the node position in the case of multiple simulations such as factorials.}
 
 \item{verbose}{whether to print information about successful edit}
 }
@@ -88,12 +88,12 @@ bds <- c(1.02, 1.03, 1.09, 1.16, 1.18, 1.19, 1.20)
 edit_apsimx("Wheat.apsimx", src.dir = extd.dir,
             wrt.dir = tmp.dir,
             node = "Soil",
-            soil.child = "Water", 
+            soil.child = "Physical", 
             parm = "BD", value = bds,
             verbose = FALSE)
 ## Inspect file
 inspect_apsimx("Wheat-edited.apsimx", src.dir = tmp.dir,
-                node = "Soil", soil.child = "Water")
+                node = "Soil", soil.child = "Physical")
 ## To delete the file...
 file.remove(file.path(tmp.dir, "Wheat-edited.apsimx"))
 

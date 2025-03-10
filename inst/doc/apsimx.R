@@ -4,17 +4,17 @@ library(apsimx)
 library(ggplot2)
 
 ## ----apsimx-options, echo = FALSE, eval = FALSE-------------------------------
-#  apsimx_options(warn.versions = FALSE)
-#  ava <- apsim_version(verbose = FALSE)
-#  aiu <- apsim_version(which = "inuse")
-#  ##if(is.na(ava[2,2])) stop("Need APSIM-X to create this vignette")
+# apsimx_options(warn.versions = FALSE)
+# ava <- apsim_version(verbose = FALSE)
+# aiu <- apsim_version(which = "inuse")
+# ##if(is.na(ava[2,2])) stop("Need APSIM-X to create this vignette")
 
 ## ----create-temp-dir, echo = TRUE, eval = TRUE--------------------------------
 ## Will only write file to a temporary directory for these Examples
 tmp.dir <- tempdir()
 
 ## ----apsimx-example, eval = FALSE---------------------------------------------
-#  maize <- apsimx_example("Maize")
+# maize <- apsimx_example("Maize")
 
 ## ----read-in-maize-example, eval = TRUE, echo = FALSE-------------------------
 extd.dir <- system.file("extdata", package = "apsimx")
@@ -50,15 +50,15 @@ inspect_apsimx("Maize-edited.apsimx", src.dir = ".",
                node = "Soil", soil.child = "Organic")
 
 ## ----apsimx-wheat-no-run, eval = FALSE----------------------------------------
-#  sim <- apsimx("Wheat.apsimx", src.dir = extd.dir, value = "report")
+# sim <- apsimx("Wheat.apsimx", src.dir = extd.dir, value = "report")
 
 ## ----apsimx-wheat-no-run-two, eval = FALSE------------------------------------
-#  ex.dir <- auto_detect_apsimx_examples()
-#  ## Copy 'Wheat' file to a temporary directory
-#  ## (or change as needed)
-#  tmp.dir2 <- tempdir()
-#  file.copy(paste0(ex.dir, "/", "Wheat.apsimx"), tmp.dir2)
-#  sim <- apsimx("Wheat.apsimx", src.dir = tmp.dir2, value = "report")
+# ex.dir <- auto_detect_apsimx_examples()
+# ## Copy 'Wheat' file to a temporary directory
+# ## (or change as needed)
+# tmp.dir2 <- tempdir()
+# file.copy(paste0(ex.dir, "/", "Wheat.apsimx"), tmp.dir2)
+# sim <- apsimx("Wheat.apsimx", src.dir = tmp.dir2, value = "report")
 
 ## ----apsimx-wheat-read, echo = FALSE------------------------------------------
 ## sim <- read_apsimx("Wheat.db", src.dir = extd.dir)
@@ -184,11 +184,11 @@ inspect_apsimx_replacement("MaizeSoybean-edited.apsimx",
                            parm = "Y") 
 
 ## ----inspect-factorial-0, eval = FALSE----------------------------------------
-#  ## There are multiple 'Experiments' so we need to pick one
-#  inspect_apsimx_replacement("Factorial", src.dir = extd.dir,
-#                             root = list("Experiment", NA))
-#  ##These positions matched  Experiment   1 2 3 4 5
-#  ##Error in inspect_apsimx_replacement("Factorial", src.dir = ex.dir, root = ##list("Experiment", : Multiple root nodes found. Please provide a position
+# ## There are multiple 'Experiments' so we need to pick one
+# inspect_apsimx_replacement("Factorial", src.dir = extd.dir,
+#                            root = list("Experiment", NA))
+# ##These positions matched  Experiment   1 2 3 4 5
+# ##Error in inspect_apsimx_replacement("Factorial", src.dir = ex.dir, root = ##list("Experiment", : Multiple root nodes found. Please provide a position
 
 ## ----inspect-factorial--------------------------------------------------------
 ## There are multiple 'Experiments' so we need to pick one
@@ -205,17 +205,17 @@ inspect_apsimx_replacement("Factorial", src.dir = extd.dir,
                            display.available = TRUE)
 
 ## ----inspect-apsimx-factorial-1, eval = FALSE---------------------------------
-#  inspect_apsimx("Factorial.apsimx", src.dir = extd.dir)
-#  ## Simulation structure:
-#  ## list Name: Simulations
-#  # list length: 8
-#  # list names: $type ExplorerWidth Version Name Children IncludeInDocumentation Enabled ReadOnly
-#  # Children: Yes
-#  # Children length: 6
-#  # Children Names: Experiment RangeExperiment OperationsExpt Compound ManagerExpt DataStore
-#  # Error in inspect_apsimx("Factorial", src.dir = ex.dir) :
-#  #   more than one simulation found and no root node label has been specified
-#  #  select one of the children names above
+# inspect_apsimx("Factorial.apsimx", src.dir = extd.dir)
+# ## Simulation structure:
+# ## list Name: Simulations
+# # list length: 8
+# # list names: $type ExplorerWidth Version Name Children IncludeInDocumentation Enabled ReadOnly
+# # Children: Yes
+# # Children length: 6
+# # Children Names: Experiment RangeExperiment OperationsExpt Compound ManagerExpt DataStore
+# # Error in inspect_apsimx("Factorial", src.dir = ex.dir) :
+# #   more than one simulation found and no root node label has been specified
+# #  select one of the children names above
 
 ## ----inspect-apsimx-factorial-2-----------------------------------------------
 inspect_apsimx("Factorial.apsimx", src.dir = extd.dir,
@@ -230,6 +230,6 @@ edit_apsimx("Factorial.apsimx",
             value = "Ames.met")
 
 ## ----apsim-verions-tail, eval = FALSE-----------------------------------------
-#  ava <- apsim_version()
-#  aiu <- apsim_version(which = "inuse")
+# ava <- apsim_version()
+# aiu <- apsim_version(which = "inuse")
 

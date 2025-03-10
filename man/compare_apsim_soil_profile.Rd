@@ -9,22 +9,26 @@
 compare_apsim_soil_profile(
   ...,
   soil.var = c("all", "Thickness", "BD", "AirDry", "LL15", "DUL", "SAT", "KS", "Carbon",
-    "SoilCNRatio", "FOM", "FOM.CN", "FBiom", "FInert", "NO3N", "NH4N", "PH"),
+    "SoilCNRatio", "FOM", "FOM.CN", "FBiom", "FInert", "NO3N", "NH4N", "PH",
+    "ParticleSizeClay", "ParticleSizeSilt", "ParticleSizeSand"),
   property,
   labels,
+  merge.wide = TRUE,
   check = FALSE,
   verbose = FALSE
 )
 
-\method{print}{soil_profile_mrg}(x, ..., digits = 2)
+\method{print}{soil_profile_mrg}(x, ..., format = c("wide", "long"), digits = 2)
 
 \method{plot}{soil_profile_mrg}(
   x,
   ...,
   plot.type = c("depth", "vs", "diff", "density"),
-  pairs = c(1, 2),
+  pairs = NULL,
   soil.var = c("all", "Thickness", "BD", "AirDry", "LL15", "DUL", "SAT", "KS", "Carbon",
-    "SoilCNRatio", "FOM", "FOM.CN", "FBiom", "FInert", "NO3N", "NH4N", "PH"),
+    "SoilCNRatio", "FOM", "FOM.CN", "FBiom", "FInert", "NO3N", "NH4N", "PH",
+    "ParticleSizeClay", "ParticleSizeSilt", "ParticleSizeSand"),
+  property,
   span = 0.75
 )
 }
@@ -37,11 +41,15 @@ compare_apsim_soil_profile(
 
 \item{labels}{labels for plotting and identification of \sQuote{soil_profile} objects.}
 
+\item{merge.wide}{whether to attempt to merge soils in \sQuote{wide} format.}
+
 \item{check}{whether to check \sQuote{soil_profile} objects using \sQuote{check_apsimx_soil_profile}.}
 
 \item{verbose}{whether to print agreement values (default is FALSE).}
 
 \item{x}{object of class \sQuote{soil_profile_mrg}}
+
+\item{format}{either \sQuote{wide} or \sQuote{long}, which depends on the merging.}
 
 \item{digits}{number of digits to print (default is 2)}
 

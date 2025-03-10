@@ -9,7 +9,7 @@
 #' @param edit.tag default edit tag \sQuote{-edited}
 #' @param overwrite default FALSE
 #' @param verbose default TRUE and it will print messages to console
-#' @param root supply the node postion in the case of multiple simulations such as factorials.
+#' @param root supply the node position in the case of multiple simulations such as factorials.
 #' @return writes a file to disk with the supplied soil profile
 #' @details This function is designed to batch replace the whole soil in an APSIM simulation file. 
 #' @note There is no such thing as a default soil, carefully build the profile for each simulation.
@@ -37,7 +37,10 @@ edit_apsimx_replace_soil_profile <-  function(file = "", src.dir = ".",
                                               verbose = TRUE,
                                               root = NULL){
   
-  if(!apsimx::apsimx.options$allow.path.spaces) .check_apsim_name(file)
+  if(isFALSE(get("allow.path.spaces", envir = apsimx::apsimx.options))){
+    .check_apsim_name(file)
+    .check_apsim_name(src.dir)
+  } 
   
   if(missing(wrt.dir)) wrt.dir <- src.dir
   
@@ -73,7 +76,8 @@ edit_apsimx_replace_soil_profile <-  function(file = "", src.dir = ".",
         stop("At the moment 3 is the maximum length for root", call. = TRUE)
       
       if(length(root) == 1){
-        wcore1 <- grep(as.character(root), apsimx_json$Children)
+        root.node.0.names <- sapply(apsimx_json$Children, function(x) x$Name)
+        wcore1 <- grep(as.character(root[1]), root.node.0.names)
         if(length(wcore1) == 0 || length(wcore1) > 1)
           stop("no root node label found or root is not unique")
         parent.node <- apsimx_json$Children[[wcore1]]$Children
@@ -281,7 +285,7 @@ edit_apsimx_replace_soil_profile <-  function(file = "", src.dir = ".",
     soil.node[[1]]$Children <- soil.node0
   }
   
-  if(missing(root)){
+  if(is.null(root)){
     ## Replace the soil
     ## 1. soil.node to core.zone.node
     core.zone.node[wsn] <- soil.node
@@ -320,3 +324,4 @@ edit_apsimx_replace_soil_profile <-  function(file = "", src.dir = ".",
     cat("Created: ", wr.path, "\n")
   }
 }
+

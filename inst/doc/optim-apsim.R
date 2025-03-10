@@ -36,7 +36,7 @@ sim0 <- read.csv(file.path(extd.dir, "wheat-sim-b4-opt.csv"))
 sim0$Date <- as.Date(sim0$Date)
 
 ## ----sim0-wheat-sim, eval = FALSE---------------------------------------------
-#  sim0 <- apsimx("Wheat-opt-ex.apsimx", src.dir = extd.dir, value = "report")
+# sim0 <- apsimx("Wheat-opt-ex.apsimx", src.dir = extd.dir, value = "report")
 
 ## ----sim0-viz-----------------------------------------------------------------
 ## Select 
@@ -80,14 +80,14 @@ pp1 <- "Wheat.Leaf.Photosynthesis.RUE.FixedValue"
 pp2 <- "Wheat.Cultivars.USA.Yecora.BasePhyllochron"
 
 ## ----optim-apsimx, eval = FALSE-----------------------------------------------
-#  ## wop is for wheat optimization
-#  wop <- optim_apsimx("Wheat-opt-ex.apsimx",
-#                      src.dir = extd.dir,
-#                      parm.paths = c(pp1, pp2),
-#                      data = obsWheat,
-#                      weights = "mean",
-#                      replacement = c(TRUE, TRUE),
-#                      initial.values = c(1.2, 120))
+# ## wop is for wheat optimization
+# wop <- optim_apsimx("Wheat-opt-ex.apsimx",
+#                     src.dir = extd.dir,
+#                     parm.paths = c(pp1, pp2),
+#                     data = obsWheat,
+#                     weights = "mean",
+#                     replacement = c(TRUE, TRUE),
+#                     initial.values = c(1.2, 120))
 
 ## ----load-wop, echo = FALSE---------------------------------------------------
 data("wheat-opt-ex", package = "apsimx")
@@ -96,25 +96,25 @@ data("wheat-opt-ex", package = "apsimx")
 wop
 
 ## ----optim-apsimx-hessian, eval = FALSE---------------------------------------
-#  ## wop is for wheat optimization
-#  wop.h <- optim_apsimx("Wheat-opt-ex.apsimx",
-#                        src.dir = extd.dir,
-#                        parm.paths = c(pp1, pp2),
-#                        data = obsWheat,
-#                        weights = "mean",
-#                        replacement = c(TRUE, TRUE),
-#                        initial.values = c(1.2, 120),
-#                        hessian = TRUE)
+# ## wop is for wheat optimization
+# wop.h <- optim_apsimx("Wheat-opt-ex.apsimx",
+#                       src.dir = extd.dir,
+#                       parm.paths = c(pp1, pp2),
+#                       data = obsWheat,
+#                       weights = "mean",
+#                       replacement = c(TRUE, TRUE),
+#                       initial.values = c(1.2, 120),
+#                       hessian = TRUE)
 
 ## ----wop-result-hessian-------------------------------------------------------
 wop.h
 
 ## ----wop-result-opt, eval = FALSE---------------------------------------------
-#  ## We re-run the model because the Wheat-opt-ex.apsimx file
-#  ## is already edited
-#  sim.opt <- apsimx("Wheat-opt-ex.apsimx", src.dir = extd.dir, value = "report")
-#  sim.opt.s <- subset(sim.opt,
-#                      Date > as.Date("2016-09-30") & Date < as.Date("2017-07-01"))
+# ## We re-run the model because the Wheat-opt-ex.apsimx file
+# ## is already edited
+# sim.opt <- apsimx("Wheat-opt-ex.apsimx", src.dir = extd.dir, value = "report")
+# sim.opt.s <- subset(sim.opt,
+#                     Date > as.Date("2016-09-30") & Date < as.Date("2017-07-01"))
 
 ## ----import-wop-result, echo = FALSE------------------------------------------
 sim.opt.s <- read.csv(file.path(extd.dir, "wheat-sim-opt.csv"))

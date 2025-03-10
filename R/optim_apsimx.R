@@ -72,7 +72,10 @@ optim_apsimx <- function(file, src.dir = ".",
                          grid,
                          ...){
 
-  .check_apsim_name(file)
+  if(isFALSE(get("allow.path.spaces", envir = apsimx::apsimx.options))){
+    .check_apsim_name(file)
+    .check_apsim_name(normalizePath(src.dir))
+  }
 
   ## The might offer suggestions in case there is a typo in 'file'
   file.names <- dir(path = src.dir, pattern = ".apsimx$", ignore.case = TRUE)
@@ -275,7 +278,6 @@ optim_apsimx <- function(file, src.dir = ".",
       if(!is.null(sim$report)) sim$report <- as.factor(sim$report)
       if(!is.null(sim$SimulationName)) sim$SimulationName <- as.factor(sim$SimulationName)
       if(!is.null(data$SimulationName)) data$SimulationName <- as.factor(data$SimulationName)
-      browser()
       sim.s0 <- merge(sim, subset(data, select = index), by = index)
       sim.s <- subset(sim.s0, select = names(data))
       ## However, they need to be in the exact same order

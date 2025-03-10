@@ -12,7 +12,7 @@
 
 <meta name="author" content="Fernando Miguez" />
 
-<meta name="date" content="2024-08-19" />
+<meta name="date" content="2025-03-09" />
 
 <title>Sensitivity Analysis</title>
 
@@ -62,7 +62,7 @@ div.sourceCode { overflow: auto; }
 }
 @media print {
 pre > code.sourceCode { white-space: pre-wrap; }
-pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+pre > code.sourceCode > span { display: inline-block; text-indent: -5em; padding-left: 5em; }
 }
 pre.numberSource code
 { counter-reset: source-line 0; }
@@ -340,7 +340,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">Sensitivity Analysis</h1>
 <h4 class="author">Fernando Miguez</h4>
-<h4 class="date">2024-08-19</h4>
+<h4 class="date">2025-03-09</h4>
 
 
 <div id="TOC">
@@ -546,15 +546,15 @@ methods are available. For this task, the package
 <span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a>                   <span class="at">binf =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">5</span>), <span class="at">bsup =</span> <span class="fu">c</span>(<span class="dv">200</span>, <span class="dv">300</span>))</span>
 <span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a>X.mrrs<span class="sc">$</span>X</span></code></pre></div>
 <pre><code>##       Fertiliser Population
-##  [1,]        100      152.5
-##  [2,]        100        5.0
-##  [3,]        200        5.0
-##  [4,]        100        5.0
+##  [1,]          0      300.0
+##  [2,]          0      152.5
+##  [3,]        100      152.5
+##  [4,]        200      152.5
 ##  [5,]        100      152.5
-##  [6,]          0      152.5
-##  [7,]          0      152.5
-##  [8,]          0        5.0
-##  [9,]        100        5.0</code></pre>
+##  [6,]        100        5.0
+##  [7,]        200      152.5
+##  [8,]        100      152.5
+##  [9,]        100      300.0</code></pre>
 <p>The sensitivity package allows for decoupling the simulation runs and
 the analysis of the results. For example:</p>
 <div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="do">## This takes 2-3 minutes</span></span>

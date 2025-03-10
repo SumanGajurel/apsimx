@@ -1,6 +1,7 @@
 ## This test will build from simple to more complex sensitivity analysis
 
 require(apsimx)
+packageVersion("apsimx")
 require(ggplot2)
 apsimx_options(warn.versions = FALSE)
 
@@ -85,7 +86,8 @@ if(run.sens.apsimx){
   file.remove("WheatRye.apsimx")
   file.remove("Ames.met")
   file.remove("WheatRye.db")
-
+  file.remove("WheatRye.db-shm")
+  file.remove("WheatRye.db-wal")
 }
 
 ## MaizeSoybean example
@@ -164,13 +166,16 @@ if(run.sens.apsimx){
   ggplot(data = sim1, aes(x = Date, y = Maize.Leaf.Transpiration)) + 
     geom_point()
   
-    
+  ### Clean up
+  file.remove(dir(pattern = "MaizeSoybean"))
+  file.remove("Ames.met")
 }
 
 if(run.sens.apsimx){
   
   extd.dir <- system.file("extdata", package = "apsimx")
   file.copy(file.path(extd.dir, "Wheat.apsimx"), tmp.dir)
+  file.copy(file.path(extd.dir, "Ames.met"), ".")
   ## Identify a parameter of interest
   ## In this case we want to know the impact of varying the fertilizer amount
   pp <- inspect_apsimx("Wheat.apsimx", src.dir = tmp.dir, 
@@ -224,6 +229,10 @@ if(run.sens.apsimx){
 
   ggplot(col.res, aes(x = fertilizer.amount, y = wheat.annual.leaf.transpiration)) + 
     geom_point()
+  
+  ### Clean up
+  file.remove(dir(pattern = "Wheat"))
+  file.remove("Ames.met")
 
 }
 
@@ -231,6 +240,7 @@ if(run.sens.apsimx){
   
   extd.dir <- system.file("extdata", package = "apsimx")
   file.copy(file.path(extd.dir, "Wheat.apsimx"), ".")
+  file.copy(file.path(extd.dir, "Ames.met"), ".")
   ## Identify a parameter of interest
   ## In this case we want to know the impact of varying the fertilizer amount
   ## and the plant population
@@ -245,18 +255,25 @@ if(run.sens.apsimx){
   grd <- expand.grid(parm1 = c(50, 100, 150), parm2 = c(100, 200, 300))
   names(grd) <- c("Fertiliser", "Population")
   
+  start <- Sys.time()
   sns <- sens_apsimx("Wheat.apsimx", src.dir = tmp.dir,
                      parm.paths = c(pp1, pp2),
-                     grid = grd)
+                     grid = grd,
+                     cores = 2L)
+  end <- Sys.time()
+  ### Time elapsed with 2 cores (Mac 2017): 1.158267 (minutes)
+  ### Time elapsed with 1 core (Mac 2017): 1.921198 (minutes)
+  ### Time elapsed with 2 cores (Mac 2021): 55.6 (seconds)
   
   summary(sns)
   summary(sns, select = "Wheat.AboveGround.Wt")
   summary(sns, select = "AboveGround")
-  
-  
+  ## summary(sns, select = "AboveGround", formula = 2L)
+
   sns.nn <- sens_apsimx("Wheat.apsimx", src.dir = tmp.dir,
                         parm.paths = c(pp1, pp2),
-                        grid = grd, summary = "none")
+                        grid = grd, summary = "none",
+                        cores = 2L)
   
   summary(sns.nn, select = "Wheat.AboveGround.Wt")
   
@@ -268,11 +285,16 @@ if(run.sens.apsimx){
   
   sns2 <- sens_apsimx("Wheat.apsimx", src.dir = tmp.dir,
                       parm.paths = c(pp1, pp2),
-                      grid = X.mrrs$X)
+                      grid = X.mrrs$X,
+                      cores = 2L)
   ## These are the sensitivity results for AboveGround.Wt only
   sns.res.ag <- tell(X.mrrs, sns2$grid.sims$Wheat.AboveGround.Wt)
   sns.res.ag
   plot(sns.res.ag)
+  
+  ### Clean up
+  file.remove(dir(pattern = "Wheat"))
+  file.remove(dir(pattern = "Ames.met"))
   
 }
 
@@ -328,6 +350,7 @@ if(run.sens.apsimx.cores){
   
   extd.dir <- system.file("extdata", package = "apsimx")
   file.copy(file.path(extd.dir, "Wheat.apsimx"), ".")
+  file.copy(file.path(extd.dir, "Ames.met"), ".")
   ## Identify a parameter of interest
   ## In this case we want to know the impact of varying the fertilizer amount
   ## and the plant population
@@ -342,53 +365,71 @@ if(run.sens.apsimx.cores){
   grd <- expand.grid(parm1 = c(50, 100, 150), parm2 = c(100, 200, 300))
   names(grd) <- c("Fertiliser", "Population")
   
+  ## dim(grd) ## 9 simulations
+  start <- Sys.time()
   sns <- sens_apsimx("Wheat.apsimx", src.dir = tmp.dir,
                      parm.paths = c(pp1, pp2),
                      grid = grd)
+  (Sys.time() - start)
   ## This takes 1.55 minutes (Mac)
   ## This now (Jan 2024) takes 2.14 minutes (Mac)
-  ## Windows (Apr 2024): 51 seconds
+  ## Mac 2017 (Aug 2024): 1.800195
+  ## Mac 2021 (Mar 2025): 1.5 minutes
   summary(sns)
   summary(sns, select = "Wheat.AboveGround.Wt", scale = TRUE)
   summary(sns, select = "AboveGround", scale = TRUE)
   
+  start <- Sys.time()
   sns.c2 <- sens_apsimx("Wheat.apsimx", src.dir = tmp.dir,
                         parm.paths = c(pp1, pp2),
-                        grid = grd, cores = 2)
+                        grid = grd, cores = 2L)
+  (Sys.time() - start)
   ## This takes 1.29 minutes (Jan 2024)
   ## Windows: NA
+  ## Mac 2017 (Aug 2024): 1.319598
+  ## Mac 2021 (Mar 2025): 54 seconds 
   ## Are they the same?
   (diff.sns.vs.sns.c2 <- sum(colSums(sns$grid.sims - sns.c2$grid.sims)))
   
   if(abs(diff.sns.vs.sns.c2) > 0.001)
     stop("Simulations with 2 cores do not match")
   
+  start <- Sys.time()
   sns.c4 <- sens_apsimx("Wheat.apsimx", src.dir = tmp.dir,
                         parm.paths = c(pp1, pp2),
                         grid = grd, cores = 4)
-  ## This takes 1.17 minutes
+  (Sys.time() - start)
+  ## Mac 2017 (Aug 2024) takes: 1.161401 minutes
+  ## Mac 2021 (Mar 2025) takes: 33.9 seconds
   (diff.sns.vs.sns.c4 <- sum(colSums(sns$grid.sims - sns.c4$grid.sims)))
   
   if(abs(diff.sns.vs.sns.c4) > 0.001)
     stop("Simulations with 4 cores do not match")
 
   #### Summary = 'none' and 1L core
+  start <- Sys.time()
   sns.s0 <- sens_apsimx("Wheat.apsimx", src.dir = tmp.dir,
                         parm.paths = c(pp1, pp2),
                         summary = "none",
                         grid = grd)
+  (Sys.time() - start)
   
+  start <- Sys.time()
   sns.s0.c2 <- sens_apsimx("Wheat.apsimx", src.dir = tmp.dir,
                            parm.paths = c(pp1, pp2),
                            summary = "none",
                            grid = grd,
                            cores = 2L)
-  ##require(arsenal) 
+  (Sys.time() - start)
+  ### The difference in times here are: Mac 2017 (1 core) - 1.63 vs. (2 cores) - 1.1
+  ### The difference in times here are: Mac 2021 (1 core) - 1.52 vs. (2 cores) - 54.4 seconds
+  ## library(arsenal) 
   
   ## Data.frames are not identical, but summary results are
   ## cm1 <- arsenal::comparedf(sns.s0$grid.sims, sns.s0.c2$grid.sims)
   sns.s0$grid.sims[78, "Fertiliser"]
   sns.s0.c2$grid.sims[78, "Fertiliser"]
+  ## The results are the same, but in different order
   
   summary(sns.s0, select = "AboveGround.Wt", scale = TRUE)
   summary(sns.s0.c2, select = "AboveGround.Wt", scale = TRUE)
@@ -407,7 +448,10 @@ if(run.sens.apsimx.cores){
   snsd2.o <- snsd2[order(snsd2$Fertiliser, snsd2$Population, snsd2$Date), ]
   ##cmpd12 <- arsenal::comparedf(snsd2.o, snsd2.o)   
   
-  
+  ### Clean up
+  file.remove(dir(pattern = "Wheat"))
+  file.remove(dir(pattern = "Ames.met"))
+
 }
 
 #### Testing passing of soil profiles -----
@@ -418,6 +462,7 @@ if(run.sens.apsimx.soils){
   
   extd.dir <- system.file("extdata", package = "apsimx")
   file.copy(file.path(extd.dir, "Wheat.apsimx"), ".")
+  file.copy(file.path(extd.dir, "Ames.met"), ".")
   ## Identify a parameter of interest
   ## In this case we want to know the impact of varying the fertilizer amount
   ## and the plant population
@@ -432,22 +477,36 @@ if(run.sens.apsimx.soils){
   grd <- expand.grid(parm1 = c(50, 100, 150), parm2 = c(100, 200, 300), parm3 = c(1, 2))
   names(grd) <- c("Fertiliser", "Population", "soil.profile")
   
-  inspect_apsimx("Wheat", node = "Other", parm = list(1, 1, 5, 0), print.path = TRUE)
+  inspect_apsimx("Wheat.apsimx", node = "Other", parm = list(1, 1, 5, 0), print.path = TRUE)
 
   ### Getting soils
-  sps <- get_ssurgo_soil_profile(lonlat = c(-93, 42), nsoil = 2)
+  sps <- get_ssurgo_soil_profile(lonlat = c(-93, 42), nsoil = 2, fix = TRUE)
   
   plot(sps[[1]], property = "water")
   plot(sps[[1]], property = "Carbon")
+  
+  plot(sps[[2]], property = "water")
+  plot(sps[[2]], property = "Carbon")
 
+  ## Base simulation
+  sim0 <- apsimx("Wheat.apsimx", src.dir = tmp.dir)
+  
+  start <- Sys.time()
   sns <- sens_apsimx("Wheat.apsimx", src.dir = tmp.dir,
                      parm.paths = c(pp1, pp2, 'soil.profile'),
                      soil.profiles = sps,
                      grid = grd)
+  (Sys.time() - start) 
+  ## Taking 3.32 minutes (Mac 2017 - Aug 2024)
+  ## Taking 3.1 minutes (Mac 2021 - Mar 2025)
   
   snsd <- sns$grid.sims
   
   ggplot(data = snsd, aes(x = Fertiliser, y = Yield, color = as.factor(soil.profile))) + 
+    facet_wrap(~ Population) + 
+    geom_line()
+
+  ggplot(data = snsd, aes(x = Fertiliser, y = Wheat.AboveGround.Wt, color = as.factor(soil.profile))) + 
     facet_wrap(~ Population) + 
     geom_line()
   
@@ -457,5 +516,117 @@ if(run.sens.apsimx.soils){
   plot(cmps, plot.type = "depth", soil.var = c("DUL"))
   plot(cmps, plot.type = "depth", soil.var = c("LL15")) ## Should implement 'water'
   plot(cmps, plot.type = "depth", soil.var = "Carbon")
-    
+
+  ### Clean up
+  file.remove("Wheat.apsimx")
+  file.remove("Ames.met")
+}
+
+#### Multiple soils simulation ----
+### I need to think more about the additional tests that I need to 
+### to ensure that the feature of cycling through soils works
+### Why did I think that there can be more than one column of soils that
+### Need to be replaced? I think it is because of multiple simulations
+### In one simulation run I could need to replace the soil of several 'roots'
+### How do I do this?
+
+run.multiple.soils.sens.apsimx <- FALSE
+
+if(run.multiple.soils.sens.apsimx){
+  
+  ### Is AgPasture the best example of a multiple simulation file?
+  extd.dir <- system.file("extdata", package = "apsimx")  
+  file.copy(file.path(extd.dir, "MaizeSoybean.apsimx"), ".")
+  file.copy(file.path(extd.dir, "Ames.met"), ".")
+  
+  inspect_apsimx("MaizeSoybean.apsimx", ".", node = "Other",
+                 parm = 2)
+  
+  inspect_apsimx("MaizeSoybean.apsimx", ".", node = "Other",
+                 parm = list(1, 2, 5, 0))
+  
+  check_apsimx("MaizeSoybean.apsimx", root = "SimulationSoybean")
+  check_apsimx("MaizeSoybean.apsimx", root = "SimulationMaize")
+  
+  sim0 <- apsimx("MaizeSoybean.apsimx")
+
+  dir()
+  dim(sim0)
+  
+  ggplot(data = sim0[sim0$SimulationName == "SimulationMaize", ], 
+         aes(x = Date, y = Maize.Total.Wt)) + 
+    geom_line()
+  
+  ggplot(data = sim0[sim0$SimulationName == "SimulationSoybean", ], 
+         aes(x = Date, y = Soybean.Total.Wt)) + 
+    geom_line()
+  
+  ### Inspecting the soil
+  inspect_apsimx("MaizeSoybean.apsimx", node = "Soil",
+                 root = "SimulationSoybean",
+                 soil.child = "Physical")
+  
+  inspect_apsimx("MaizeSoybean.apsimx", node = "Soil",
+                 root = "SimulationMaize",
+                 soil.child = "Physical")
+
+  inspect_apsimx("MaizeSoybean.apsimx", node = "Soil",
+                 root = "SimulationMaize") ### Nicollet
+  inspect_apsimx("MaizeSoybean.apsimx", node = "Soil",
+                 root = "SimulationSoybean") ### Nicollet
+  
+  #### Extracting alternative soils for this location?
+  sps <- get_ssurgo_soil_profile(c(-93.76911, 42.02204), nsoil = 2, fix = TRUE)
+
+  #### Which soils are these?
+  sps[[1]]$metadata$SoilType
+  sps[[2]]$metadata$SoilType
+  
+  plot(sps[[1]], property = "water")
+  plot(sps[[2]], property = "water")
+  
+  #### Now I want to edit these soils for each simulation... Will it work?
+  #### What if I ONLY change the soils? It does not work
+  soil.paths <- c("SimulationSoybean.Soil", "SimulationMaize.Soil")
+  grd <- expand.grid(soil1 = 1:2, soil2 = 1:2)
+  names(grd) <- soil.paths
+  
+  start <- Sys.time()
+  sns.soil0 <- sens_apsimx("MaizeSoybean.apsimx", 
+                           parm.paths = soil.paths,
+                           convert = rep(FALSE, 2),
+                           replacement = rep(FALSE, 2),
+                           grid = grd,
+                           summary = "none",
+                           soil.profiles = sps)
+  (Sys.time() - start)
+  
+  head(sns.soil0$grid.sims[, c(1, 2, 3, 9)])
+
+  snsM <- subset(sns.soil0$grid.sims, SimulationName == "SimulationMaize") 
+  ggplot(data = snsM, 
+         aes(x = Date, y = Maize.Total.Wt, color = as.factor(SimulationMaize.Soil))) + 
+    geom_line() + 
+    ylim(c(1000, 2000))
+  
+  snsS <- subset(sns.soil0$grid.sims, SimulationName == "SimulationSoybean") 
+  ggplot(data = snsS, 
+         aes(x = Date, y = Soybean.Total.Wt, color = as.factor(SimulationSoybean.Soil))) + 
+    geom_line()
+  
+  ### Can I use more than one core?
+  start <- Sys.time()
+  sns.soil0.c2 <- sens_apsimx("MaizeSoybean.apsimx", 
+                              parm.paths = soil.paths,
+                              convert = rep(FALSE, 2),
+                              replacement = rep(FALSE, 2),
+                              grid = grd,
+                              summary = "none",
+                              soil.profiles = sps,
+                              cores = 2L)
+  (Sys.time() - start)
+  #### There appears to be no benefit with such a small number of simulations,
+  #### but it runs...
+  
+  
 }
